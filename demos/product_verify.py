@@ -26,13 +26,18 @@ class PageFacts(HTMLParser):
         self.suppressed = []
         self.hidden_classes = {'sr-only', 'visually-hidden', 'screen-reader-only'}
         self.hidden_ids = set()
+        self.external_stylesheets = []
 
     @staticmethod
     def hidden_style(style):
         style = re.sub(r'/\*.*?\*/', '', style, flags=re.S).lower()
         return bool(re.search(
             r'display\s*:\s*none|visibility\s*:\s*(?:hidden|collapse)|'
-            r'opacity\s*:\s*0(?:\s|;|!|$)|clip(?:-path)?\s*:\s*(?:rect|inset)|'
+            r'opacity\s*:\s*(?:0+(?:\.0*)?|\.0+)%?(?:\s|;|!|$)|'
+            r'filter\s*:[^;]*opacity\(\s*(?:0+(?:\.0*)?|\.0+)%?\s*\)|'
+            r'clip(?:-path)?\s*:\s*(?:rect|inset)|'
+            r'(?:width|height)\s*:\s*1px[^}]*overflow\s*:\s*hidden|'
+            r'overflow\s*:\s*hidden[^}]*(?:width|height)\s*:\s*1px|'
             r'font-size\s*:\s*0(?:\D|$)', style))
 
     def feed(self, data):
@@ -49,6 +54,8 @@ class PageFacts(HTMLParser):
     def handle_starttag(self, tag, attrs):
         self.all_tags[tag] = self.all_tags.get(tag, 0) + 1
         values = dict(attrs)
+        if tag == 'link' and 'stylesheet' in values.get('rel', '').lower().split():
+            self.external_stylesheets.append(values.get('href', ''))
         hidden = (tag in {'script', 'style', 'template', 'noscript'} or 'hidden' in values
                   or values.get('aria-hidden', '').lower() == 'true'
                   or bool(set(values.get('class', '').split()) & self.hidden_classes)
@@ -188,6 +195,9 @@ def verify_product(name, workdir, manual_evidence=None, browser_probe=None):
             details.update(words=len(words), tags=page.tags)
             details['visibility_method'] = 'conservative_static'
             details['visibility_limitation'] = 'No computed browser visibility measured; manual evidence required'
+            details['external_stylesheets'] = page.external_stylesheets
+            if page.external_stylesheets and browser_probe is None:
+                errors.append('External stylesheet visibility requires browser measurements; static counts are provisional')
             if browser_probe is not None:
                 # A trusted external runtime adapter must measure every viewport.
                 samples = [browser_probe(root / 'index.html', width) for width in (360, 768, 1280)]
@@ -201,6 +211,12 @@ def verify_product(name, workdir, manual_evidence=None, browser_probe=None):
                                        svg=min(s['svgs'] for s in samples))
                 details['visibility_method'] = 'browser_computed'
                 details['visibility_limitation'] = 'Browser adapter supplied measurements; manual interaction checks remain'
+                required_checks = (('subscription_toggle', 'brew_tabs', 'faq', 'dark_persistence')
+                                   if name == 'artisan-coffee' else
+                                   ('keyboard_movement', 'food_collection', 'speed_change', 'pause', 'restart', 'high_score_persistence'))
+                for check in required_checks:
+                    if not all(s.get('checks', {}).get(check) is True for s in samples):
+                        errors.append('Browser observation missing or failed: ' + check)
             if len(source.strip()) < 500 or not page.all_tags.get('script') or not page.tags.get('button'):
                 errors.append('Expected substantive self-contained HTML with scripts and controls')
             if re.search(r'lorem ipsum|TODO|coming soon', source, re.I):

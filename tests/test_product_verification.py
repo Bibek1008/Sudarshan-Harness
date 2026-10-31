@@ -18,6 +18,9 @@ class ProductVerificationTests(unittest.TestCase):
 
     def test_hidden_fixtures_exclude_copy_sections_and_svgs(self):
         fixtures = (
+            ('class="zero"', '.zero { opacity: 0.0; }'),
+            ('class="filtered"', '.filtered { filter: opacity(0); }'),
+            ('class="reader"', '.reader { position:absolute;width:1px;height:1px;overflow:hidden; }'),
             ('class="gone"', '.gone { display: none; }'),
             ('class="concealed"', '.concealed { visibility: hidden; }'),
             ('class="visually-hidden"', '.visually-hidden { position:absolute;clip:rect(0,0,0,0); }'),
@@ -46,6 +49,15 @@ class ProductVerificationTests(unittest.TestCase):
                    '<section>visible</section><svg>drawing</svg><style>.off{display:none}</style>')
         self.assertEqual(facts.tags['section'], 1)
         self.assertEqual(facts.tags['svg'], 1)
+
+    def test_external_stylesheet_requires_observed_visibility(self):
+        self.test_viper_static_hooks_do_not_prove_browser_acceptance()
+        path = self.root / 'index.html'
+        path.write_text('<link rel="stylesheet" href="unknown.css">' + path.read_text())
+        result = verify_product('viper', self.root)
+        self.assertFalse(result['automated_ok'])
+        self.assertIn('unknown.css', result['details']['external_stylesheets'])
+        self.assertFalse(result['final_accepted'])
 
     def test_configured_browser_measurements_take_precedence(self):
         self.test_viper_static_hooks_do_not_prove_browser_acceptance()
