@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from demos.product_verify import verify_product
+from demos.product_verify import verify_product, record_manual_verification
 
 
 class ProductVerificationTests(unittest.TestCase):
@@ -30,6 +30,41 @@ class ProductVerificationTests(unittest.TestCase):
         self.assertTrue(result['automated_ok'])
         self.assertFalse(result['accepted'])
         self.assertTrue(result['manual_required'])
+        self.assertTrue(result['automated_passed'])
+        self.assertTrue(result['manual_pending'])
+        self.assertFalse(result['final_accepted'])
+
+    def test_manual_evidence_completion_and_stale_artifacts(self):
+        self.test_viper_static_hooks_do_not_prove_browser_acceptance()
+        required = verify_product('viper', self.root)['manual_required']
+        evidence = self.root.parent / (self.root.name + '-manual.json')
+        try:
+            record_manual_verification('viper', self.root, evidence, 'Fixture reviewer', {})
+            self.assertFalse(verify_product('viper', self.root, evidence)['final_accepted'])
+            checks = {check: {'passed': True, 'evidence': 'Fixture observation of this check'} for check in required}
+            record_manual_verification('viper', self.root, evidence, 'Fixture reviewer', checks)
+            result = verify_product('viper', self.root, evidence)
+            self.assertTrue(result['manual_passed'])
+            self.assertTrue(result['final_accepted'])
+            self.assertFalse(result['manual_pending'])
+            with (self.root / 'index.html').open('a') as handle:
+                handle.write('changed')
+            self.assertFalse(verify_product('viper', self.root, evidence)['manual_passed'])
+        finally:
+            evidence.unlink(missing_ok=True)
+
+    def test_incomplete_or_project_local_attestation_is_not_acceptance(self):
+        self.test_viper_static_hooks_do_not_prove_browser_acceptance()
+        with self.assertRaises(ValueError):
+            record_manual_verification('viper', self.root, self.root / 'evidence.json', 'Reviewer', {})
+        required = verify_product('viper', self.root)['manual_required']
+        evidence = self.root.parent / (self.root.name + '-manual.json')
+        try:
+            checks = {check: {'passed': True, 'evidence': ''} for check in required}
+            record_manual_verification('viper', self.root, evidence, 'Reviewer', checks)
+            self.assertFalse(verify_product('viper', self.root, evidence)['accepted'])
+        finally:
+            evidence.unlink(missing_ok=True)
 
     def test_hidden_copy_and_scripts_do_not_satisfy_coffee_word_quota(self):
         source = '<main><section>Real copy</section>' + '<section></section>' * 8

@@ -4,6 +4,8 @@ HTML checks establish static prerequisites, never browser interaction success.
 Generated Python tests execute with host permissions, not in a sandbox.
 """
 import ast
+import hashlib
+from datetime import datetime, timezone
 import json
 import re
 import subprocess
@@ -106,7 +108,43 @@ def _taskman(root, errors, details):
     details['cli_lifecycle_executed'] = True
 
 
-def verify_product(name, workdir):
+def artifact_digest(workdir):
+    """Bind attestation to project files, excluding transient runtime state."""
+    root = Path(workdir).resolve()
+    digest = hashlib.sha256()
+    for path in sorted(root.rglob('*')):
+        relative = path.relative_to(root)
+        if any(p in {'.sudarshan', '__pycache__', '.git'} for p in relative.parts):
+            continue
+        if path.is_file():
+            path.resolve().relative_to(root)
+            digest.update(str(relative).encode())
+            digest.update(b'\x00' + path.read_bytes() + b'\x00')
+    return digest.hexdigest()
+
+
+def record_manual_verification(name, workdir, evidence_path, reviewer, checks):
+    """Explicit human attestation: checks map requirement text to passed/evidence.
+
+    Store outside the agent's project. This records a human claim, not a trusted
+    signature; protect the evidence file using host permissions.
+    """
+    root, target = Path(workdir).resolve(), Path(evidence_path).resolve()
+    if target.is_relative_to(root):
+        raise ValueError('manual evidence must be outside the product workspace')
+    if not isinstance(reviewer, str) or not reviewer.strip():
+        raise ValueError('a named reviewer is required')
+    required = verify_product(name, root)['manual_required']
+    if not required or not isinstance(checks, dict) or set(checks) - set(required):
+        raise ValueError('checks must identify known manual requirements')
+    evidence = {'product': name, 'reviewer': reviewer.strip(),
+                'recorded_at': datetime.now(timezone.utc).isoformat(),
+                'artifact_digest': artifact_digest(root), 'checks': checks}
+    target.write_text(json.dumps(evidence, indent=2), encoding='utf-8')
+    return evidence
+
+
+def verify_product(name, workdir, manual_evidence=None):
     """Return static/executable evidence and explicit remaining manual checks."""
     root = Path(workdir).resolve()
     errors, details = [], {}
@@ -150,6 +188,29 @@ def verify_product(name, workdir):
             errors.append('Unknown product')
     except (OSError, ValueError, SyntaxError, KeyError, TypeError, subprocess.TimeoutExpired) as error:
         errors.append(f'{type(error).__name__}: {error}')
-    return {'automated_ok': not errors, 'accepted': not errors and not manual,
+    passed = False
+    evidence_error = None
+    if manual_evidence is not None:
+        try:
+            target = Path(manual_evidence).resolve()
+            if target.is_relative_to(root):
+                raise ValueError('manual evidence must be outside the product workspace')
+            evidence = json.loads(target.read_text(encoding='utf-8'))
+            checks = evidence.get('checks', {})
+            passed = (evidence.get('product') == name and bool(evidence.get('reviewer', '').strip())
+                      and bool(evidence.get('recorded_at'))
+                      and evidence.get('artifact_digest') == artifact_digest(root)
+                      and bool(manual) and all(
+                          isinstance(checks.get(check), dict)
+                          and checks[check].get('passed') is True
+                          and isinstance(checks[check].get('evidence'), str)
+                          and bool(checks[check]['evidence'].strip()) for check in manual))
+        except (OSError, ValueError, TypeError, AttributeError) as error:
+            evidence_error = str(error)
+    accepted = not errors and passed
+    return {'automated_ok': not errors, 'accepted': accepted,
+            'automated_passed': not errors, 'manual_pending': not passed,
+            'manual_passed': passed, 'final_accepted': accepted,
+            'manual_evidence_error': evidence_error,
             'errors': errors, 'details': details, 'manual_required': manual,
-            'status': 'incomplete' if errors or manual else 'accepted'}
+            'status': 'final_accepted' if accepted else 'manual_pending' if not errors else 'automated_failed'}

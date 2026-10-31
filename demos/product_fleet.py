@@ -49,7 +49,7 @@ def main() -> None:
     print(json.dumps(report, indent=2))
 
 
-def run_products(root: Path) -> dict:
+def run_products(root: Path, manual_evidence=None) -> dict:
     """Build, gate, repair and review; model text alone never establishes success."""
     root = root.resolve()
     if (root / 'run-evidence.json').exists():
@@ -133,9 +133,14 @@ def run_products(root: Path) -> dict:
     final = []
     for job in jobs:
         name = job['name']
-        verification = verify_product(name, root / name)
+        verification = (verify_product(name, root / name, manual_evidence=manual_evidence[name])
+                        if manual_evidence and name in manual_evidence else verify_product(name, root / name))
         reviewed = reviews[name]['ok']
         final.append({'name': name, 'ok': bool(reviewed and verification['accepted']),
+                      'automated_passed': verification['automated_ok'],
+                      'manual_pending': verification.get('manual_pending', not verification['accepted']),
+                      'manual_passed': verification.get('manual_passed', False),
+                      'final_accepted': bool(reviewed and verification['accepted']),
                       'review_ok': reviewed, 'verification': verification,
                       'status': 'accepted' if reviewed and verification['accepted'] else 'incomplete'})
     report['final'] = final
