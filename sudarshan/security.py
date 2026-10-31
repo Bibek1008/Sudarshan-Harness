@@ -75,9 +75,7 @@ class Policy:
 
 
 def _logical_tool_name(name: str) -> str:
-    """Normalize registered backend tool names without changing Policy's API."""
-    actions = READ_TOOLS | {"bash", "write_file"}
-    for action in actions:
-        if name == action or name.endswith(f"_{action}"):
-            return action
+    """Keep read trust exact; shell suffixes only add restrictive inspection."""
+    if name.endswith('_bash'):
+        return 'bash'
     return name
