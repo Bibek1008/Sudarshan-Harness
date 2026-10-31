@@ -139,4 +139,3 @@ filesystem races and container/runtime trust described above.
 The full requested objective remains incomplete until credentials and provider access
 allow real builds, reviews, independent product verification and any needed repairs.
 Passing this suite is not a production-readiness certification.
-
