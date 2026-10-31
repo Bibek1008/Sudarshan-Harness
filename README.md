@@ -195,3 +195,48 @@ hooks do not prove gameplay, responsive design or accessibility. Browser checks
 and manual assessment of meaningful test coverage remain required; the runner
 keeps acceptance incomplete while those checks are outstanding. Model-written
 verification reports cannot clear these independent manual gates.
+
+### Recording independent acceptance
+
+Verification reports expose `automated_passed`, `manual_pending`, `manual_passed`
+and `final_accepted` separately. `automated_ok` and `accepted` remain compatible
+aliases for automated and final success. Automated success never grants final
+acceptance. Fleet results also require the review phase to have passed.
+
+After independently performing every item in `manual_required`, a human can use
+`record_manual_verification` from `demos.product_verify`:
+
+```python
+result = verify_product("artisan-coffee", project_path)
+# Populate only with real observations; missing/failed checks remain pending.
+checks = {requirement: {"passed": True, "evidence": observation}
+          for requirement, observation in independently_observed_checks.items()}
+record_manual_verification("artisan-coffee", project_path, evidence_path,
+                           reviewer="Reviewer name", checks=checks)
+result = verify_product("artisan-coffee", project_path,
+                        manual_evidence=evidence_path)
+```
+
+Import both functions from `demos.product_verify`. Evidence must be outside the
+agent's project, name a reviewer, cover every required check with literal `True`
+and nonempty evidence, and match the current artifact digest. Any project-file
+change invalidates it (runtime state and bytecode caches are excluded). Protect
+the evidence with host permissions: this is an explicit attestation, not a
+cryptographic identity guarantee. Recheck an existing project directly rather
+than rerunning the fresh-workspace fleet. The fleet API also accepts a mapping
+of product names to evidence paths via `run_products(..., manual_evidence=...)`.
+
+Static visibility checks conservatively exclude common class/ID rules using
+display:none, visibility:hidden/collapse, opacity zero or clipping, plus common
+visually-hidden classes, aria-hidden, hidden ancestors, scripts and styles.
+They count only unsuppressed sections and SVGs. They do not compute the CSS
+cascade, external stylesheets, media queries, geometry or JavaScript visibility;
+conditional CSS may therefore undercount and unfamiliar hiding may be missed.
+The report labels this method `conservative_static`, never browser verification.
+
+A trusted browser adapter can be supplied as `browser_probe` to `verify_product`
+or `run_products`. It receives `(index_path, viewport_width)` and must return
+integer `words`, `sections` and `svgs` measured with actual computed visibility.
+The verifier requests 360/768/1280 and uses the minimum counts. Adapter provenance
+is the caller's responsibility; interaction checks still require evidence.
+No browser engine is bundled, and no actual browser was run in these tests.

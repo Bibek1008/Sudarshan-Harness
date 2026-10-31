@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from demos.product_verify import verify_product, record_manual_verification
+from demos.product_verify import PageFacts, verify_product, record_manual_verification
 
 
 class ProductVerificationTests(unittest.TestCase):
@@ -15,6 +15,50 @@ class ProductVerificationTests(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def test_hidden_fixtures_exclude_copy_sections_and_svgs(self):
+        fixtures = (
+            ('class="gone"', '.gone { display: none; }'),
+            ('class="concealed"', '.concealed { visibility: hidden; }'),
+            ('class="visually-hidden"', '.visually-hidden { position:absolute;clip:rect(0,0,0,0); }'),
+            ('aria-hidden="true"', ''), ('hidden', ''),
+            ('style="display:none"', ''),
+        )
+        for attrs, css in fixtures:
+            with self.subTest(attrs=attrs):
+                source = f'<main><section>real words</section><svg>visible drawing</svg><div {attrs}>'
+                source += '<section>' + 'concealed ' * 1300 + '</section><svg>hidden drawing</svg></div>'
+                source += f'<script>{"scriptword " * 1300}</script><style>{css}</style></main>'
+                facts = PageFacts()
+                facts.feed(source)
+                self.assertEqual(facts.tags['section'], 1)
+                self.assertEqual(facts.tags['svg'], 1)
+                self.assertEqual(' '.join(facts.visible), 'real words visible drawing')
+                (self.root / 'index.html').write_text(source)
+                result = verify_product('artisan-coffee', self.root)
+                self.assertFalse(result['automated_ok'])
+                self.assertLess(result['details']['words'], 10)
+                self.assertEqual(result['details']['visibility_method'], 'conservative_static')
+
+    def test_hidden_svg_and_section_elements_are_not_counted(self):
+        facts = PageFacts()
+        facts.feed('<section hidden>hidden</section><svg class="off">hidden</svg>'
+                   '<section>visible</section><svg>drawing</svg><style>.off{display:none}</style>')
+        self.assertEqual(facts.tags['section'], 1)
+        self.assertEqual(facts.tags['svg'], 1)
+
+    def test_configured_browser_measurements_take_precedence(self):
+        self.test_viper_static_hooks_do_not_prove_browser_acceptance()
+        widths = []
+        def probe(path, width):
+            widths.append(width)
+            return {'words': 0, 'sections': 0, 'svgs': 0}
+        result = verify_product('artisan-coffee', self.root, browser_probe=probe)
+        self.assertEqual(widths, [360, 768, 1280])
+        self.assertEqual(result['details']['words'], 0)
+        self.assertEqual(result['details']['visibility_method'], 'browser_computed')
+        self.assertFalse(result['automated_ok'])
+        self.assertFalse(result['final_accepted'])
 
     def test_expected_files_are_mandatory_for_every_product(self):
         for name in ('artisan-coffee', 'taskman', 'viper'):

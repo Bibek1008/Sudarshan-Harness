@@ -21,15 +21,42 @@ class PageFacts(HTMLParser):
     def __init__(self):
         super().__init__()
         self.tags = {}
+        self.all_tags = {}
         self.visible = []
         self.suppressed = []
+        self.hidden_classes = {'sr-only', 'visually-hidden', 'screen-reader-only'}
+        self.hidden_ids = set()
+
+    @staticmethod
+    def hidden_style(style):
+        style = re.sub(r'/\*.*?\*/', '', style, flags=re.S).lower()
+        return bool(re.search(
+            r'display\s*:\s*none|visibility\s*:\s*(?:hidden|collapse)|'
+            r'opacity\s*:\s*0(?:\s|;|!|$)|clip(?:-path)?\s*:\s*(?:rect|inset)|'
+            r'font-size\s*:\s*0(?:\D|$)', style))
+
+    def feed(self, data):
+        # Conservative first pass finds hiding rules even after their elements.
+        # No cascade/media-query evaluation: uncertain content is excluded.
+        for css in re.findall(r'<style\b[^>]*>(.*?)</style\s*>', data, re.I | re.S):
+            css = re.sub(r'/\*.*?\*/', '', css, flags=re.S)
+            for selectors, declarations in re.findall(r'([^{}]+)\{([^{}]*)\}', css):
+                if self.hidden_style(declarations):
+                    self.hidden_classes.update(re.findall(r'\.([\w-]+)', selectors))
+                    self.hidden_ids.update(re.findall(r'#([\w-]+)', selectors))
+        super().feed(data)
 
     def handle_starttag(self, tag, attrs):
-        self.tags[tag] = self.tags.get(tag, 0) + 1
+        self.all_tags[tag] = self.all_tags.get(tag, 0) + 1
         values = dict(attrs)
         hidden = (tag in {'script', 'style', 'template', 'noscript'} or 'hidden' in values
-                  or values.get('aria-hidden') == 'true'
-                  or bool(re.search(r'display\s*:\s*none|visibility\s*:\s*hidden', values.get('style', ''))))
+                  or values.get('aria-hidden', '').lower() == 'true'
+                  or bool(set(values.get('class', '').split()) & self.hidden_classes)
+                  or values.get('id') in self.hidden_ids
+                  or self.hidden_style(values.get('style', '')))
+        hidden = hidden or bool(self.suppressed and self.suppressed[-1][1])
+        if not hidden:
+            self.tags[tag] = self.tags.get(tag, 0) + 1
         if tag not in {'meta', 'link', 'input', 'img', 'br', 'hr', 'source', 'area', 'embed', 'wbr'}:
             self.suppressed.append((tag, hidden or bool(self.suppressed and self.suppressed[-1][1])))
 
@@ -144,7 +171,7 @@ def record_manual_verification(name, workdir, evidence_path, reviewer, checks):
     return evidence
 
 
-def verify_product(name, workdir, manual_evidence=None):
+def verify_product(name, workdir, manual_evidence=None, browser_probe=None):
     """Return static/executable evidence and explicit remaining manual checks."""
     root = Path(workdir).resolve()
     errors, details = [], {}
@@ -159,15 +186,30 @@ def verify_product(name, workdir, manual_evidence=None):
             page.feed(source)
             words = re.findall(r"\b[\w'-]+\b", ' '.join(page.visible))
             details.update(words=len(words), tags=page.tags)
-            if len(source.strip()) < 500 or not page.tags.get('script') or not page.tags.get('button'):
+            details['visibility_method'] = 'conservative_static'
+            details['visibility_limitation'] = 'No computed browser visibility measured; manual evidence required'
+            if browser_probe is not None:
+                # A trusted external runtime adapter must measure every viewport.
+                samples = [browser_probe(root / 'index.html', width) for width in (360, 768, 1280)]
+                if any(not isinstance(s.get('words'), int) or s['words'] < 0
+                       or not isinstance(s.get('sections'), int) or s['sections'] < 0
+                       or not isinstance(s.get('svgs'), int) or s['svgs'] < 0 for s in samples):
+                    raise ValueError('Invalid browser visibility measurements')
+                details['browser_samples'] = samples
+                details['words'] = min(s['words'] for s in samples)
+                details['tags'] = dict(page.tags, section=min(s['sections'] for s in samples),
+                                       svg=min(s['svgs'] for s in samples))
+                details['visibility_method'] = 'browser_computed'
+                details['visibility_limitation'] = 'Browser adapter supplied measurements; manual interaction checks remain'
+            if len(source.strip()) < 500 or not page.all_tags.get('script') or not page.tags.get('button'):
                 errors.append('Expected substantive self-contained HTML with scripts and controls')
             if re.search(r'lorem ipsum|TODO|coming soon', source, re.I):
                 errors.append('Placeholder content remains')
             if name == 'artisan-coffee':
                 for good, message in (
-                    (page.tags.get('section', 0) >= 9, 'At least nine sections required'),
-                    (len(words) > 1200, 'More than 1200 visible text words required'),
-                    (page.tags.get('svg', 0) >= 4, 'At least four inline SVGs required'),
+                    (details['tags'].get('section', 0) >= 9, 'At least nine sections required'),
+                    (details['words'] > 1200, 'More than 1200 visible text words required'),
+                    (details['tags'].get('svg', 0) >= 4, 'At least four inline SVGs required'),
                     (bool(page.tags.get('main')), 'Semantic main element required'),
                     (all(term in source for term in ('localStorage', '@media', ':focus', '--')), 'Design/responsiveness/focus hooks missing'),
                 ):

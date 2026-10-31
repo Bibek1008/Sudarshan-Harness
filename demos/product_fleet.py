@@ -49,7 +49,7 @@ def main() -> None:
     print(json.dumps(report, indent=2))
 
 
-def run_products(root: Path, manual_evidence=None) -> dict:
+def run_products(root: Path, manual_evidence=None, browser_probe=None) -> dict:
     """Build, gate, repair and review; model text alone never establishes success."""
     root = root.resolve()
     if (root / 'run-evidence.json').exists():
@@ -90,12 +90,18 @@ def run_products(root: Path, manual_evidence=None) -> dict:
 
     jobs = [{'name': n, 'workdir': str(root / n), 'task': t} for n, t in TASKS.items()]
 
+    def inspect(name, final=False):
+        options = {'browser_probe': browser_probe} if browser_probe is not None else {}
+        if final and manual_evidence and name in manual_evidence:
+            options['manual_evidence'] = manual_evidence[name]
+        return verify_product(name, root / name, **options)
+
     def phase(selected, label):
         results = run_fleet(selected, lambda directory: factory(directory, label), max_workers=3)
         for result in results:
             name = result['name']
             result['model_ok'] = result['ok']
-            result['verification'] = verify_product(name, root / name)
+            result['verification'] = inspect(name)
             loaded = evidence.get(name, {}).get(label, {}).get('skill_loaded', False)
             result['skill_loaded'] = loaded
             result['ok'] = bool(result['ok'] and loaded and result['verification']['automated_ok'])
@@ -133,8 +139,7 @@ def run_products(root: Path, manual_evidence=None) -> dict:
     final = []
     for job in jobs:
         name = job['name']
-        verification = (verify_product(name, root / name, manual_evidence=manual_evidence[name])
-                        if manual_evidence and name in manual_evidence else verify_product(name, root / name))
+        verification = inspect(name, final=True)
         reviewed = reviews[name]['ok']
         final.append({'name': name, 'ok': bool(reviewed and verification['accepted']),
                       'automated_passed': verification['automated_ok'],
