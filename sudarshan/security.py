@@ -7,6 +7,7 @@ and every other effect requires the mode's stated authority.
 
 import re
 import shlex
+import posixpath
 from typing import Any, Callable
 
 
@@ -68,7 +69,8 @@ class Policy:
                 return "bash command cannot be evaluated safely"
             # Normalize shell quoting for conservative inspection, never for execution.
             inspected = command.replace("'", "").replace('"', '').replace('\\\n', '')
-            if _dangerous_rm(tokens) or any(re.search(pattern, inspected) for pattern in DENY_PATTERNS):
+            if (_dangerous_rm(tokens) or _dangerous_find(command)
+                    or any(re.search(pattern, inspected) for pattern in DENY_PATTERNS)):
                 return "dangerous bash command is never allowed"
         if name in READ_TOOLS or self.mode == "yolo":
             return None
@@ -102,6 +104,31 @@ def _dangerous_rm(tokens: list[str]) -> bool:
         elif active and not token.startswith('-'):
             if token.startswith(('~', '$HOME', '${HOME}')):
                 return True
-            if token.startswith('/') and all(part in ('', '.', '..', '*') for part in token.split('/')):
+            if _root_equivalent(token):
                 return True
+    return False
+
+
+def _root_equivalent(token: str) -> bool:
+    """Lexically detect absolute root equivalents; do not resolve host paths."""
+    return token.startswith('/') and (
+        posixpath.normpath(token).strip('/') == ''
+        or all(part in ('', '.', '..', '*') for part in token.split('/')))
+
+
+def _dangerous_find(command: str) -> bool:
+    """Inspect root-equivalent find operands without claiming full shell safety."""
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=';&|()')
+    lexer.whitespace_split = True
+    segment: list[str] = []
+    for token in list(lexer) + [';']:
+        if token and all(char in ';&|()' for char in token):
+            if any(part.rsplit('/', 1)[-1] == 'find' for part in segment):
+                if any(_root_equivalent(part) for part in segment) and (
+                        '-delete' in segment or any(part in ('-exec', '-execdir') for part in segment)
+                        and any(part.rsplit('/', 1)[-1] == 'rm' for part in segment)):
+                    return True
+            segment = []
+        else:
+            segment.append(token)
     return False

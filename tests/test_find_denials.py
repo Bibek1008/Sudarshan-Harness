@@ -16,6 +16,9 @@ class FindDenialTests(unittest.TestCase):
             'echo ready && find / -delete', 'echo ready; find / -delete',
             'echo ready\nfind / -delete',
             'find / -exec rm {} \\;', 'find / -execdir /bin/rm -rf {} +',
+            'rm -rf /tmp/..', 'rm -rf /var/..', 'rm -rf "/tmp/../"',
+            'find /tmp/.. -delete', 'find /var/.. -delete',
+            'find -L "/tmp/.." -exec rm {} +',
         )
         for mode in ('safe', 'read-only', 'yolo'):
             for name in ('bash', 'sandbox_bash'):
@@ -28,7 +31,9 @@ class FindDenialTests(unittest.TestCase):
                         approver.assert_not_called()
 
     def test_local_cleanup_and_root_listing_still_follow_ordinary_policy(self):
-        for command in ('find ./scratch -type f -delete', 'find / -maxdepth 1 -print'):
+        for command in ('find ./scratch -type f -delete', 'find / -maxdepth 1 -print',
+                        'rm -rf ./scratch', 'rm -rf /tmp/scratch',
+                        'find /tmp/scratch -delete'):
             call = {'name': 'bash', 'args': {'command': command}}
             with self.subTest(command=command):
                 self.assertIsNone(Policy('yolo').check(call))
