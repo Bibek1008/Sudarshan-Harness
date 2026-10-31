@@ -21,7 +21,18 @@ def new_session(workdir: str | Path, label: str = "session") -> Path:
     directory = Path(workdir).resolve() / SESSION_DIR
     directory.mkdir(parents=True, exist_ok=True)
     slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")[:40] or "session"
-    return directory / f"{int(time.time())}-{slug}.jsonl"
+    stamp = int(time.time())
+    collision = 0
+    while True:
+        suffix = f'-{collision}' if collision else ''
+        target = directory / f"{stamp}-{slug}{suffix}.jsonl"
+        try:
+            # Exclusive creation reserves the path, including across processes.
+            with target.open('x', encoding='utf-8'):
+                pass
+            return target
+        except FileExistsError:
+            collision += 1
 
 
 def append(path: str | Path, message: dict[str, Any]) -> None:
