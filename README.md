@@ -29,6 +29,11 @@ The first form is interactive. Headless `-p` runs one task. Both forms and
 approver, the library refuses these operations; CLI EOF or a blank response
 also refuses approval. Unattended execution requires an explicit policy choice.
 Use `--mode yolo` only when you intend to skip approval.
+**Headless risk:** `-p ... --mode yolo` permits ordinary shell commands without
+approval under your OS account, including file changes and network access.
+It is not a sandbox. Headless mode currently defaults to `safe`, just like
+interactive mode; this cleanup preserves that CLI contract. Older revisions
+defaulted headless runs to `yolo`, so scripts should pass `--mode` explicitly.
 `--resume` restores the newest durable JSONL session or accepts a session path.
 
 | Day | Architecture |
@@ -87,7 +92,16 @@ names default to restricted; suffixes grant no trust. Harness also restricts
 custom tools that override a built-in reader's name.
 They cover common destructive rm, sudo, mkfs, dd, curl-to-shell, force-push,
 and disk-device redirection forms. Malformed command quoting is refused.
+Root/home `find` deletion is also hard-denied: for example `find / -delete`,
+`find -L / -type f -delete`, `find "$HOME" -delete`, and
+`find / -exec rm {} \\;` (also `-execdir`). The rules recognize common
+`-H`, `-L`, `-P` and `-O` options, quotes and chained commands. Local cleanup
+such as `find ./scratch -type f -delete` still follows the selected policy.
 Regex and token checks cannot establish arbitrary shell safety.
+These are conservative patterns, not a shell parser or an exhaustive list of
+destructive programs. Other path spellings, multiple roots, aliases, expansion,
+indirect execution and nested interpreters can evade inspection. False positives
+are also possible. Use an appropriately isolated OS sandbox for untrusted code.
 
 Filesystem tools validate resolved paths, but shell commands use the host
 account's permissions. A cwd is not a sandbox. Resolve/open race windows remain.

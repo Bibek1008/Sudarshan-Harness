@@ -13,6 +13,9 @@ from typing import Any, Callable
 READ_TOOLS = {"read_file", "list_files", "grep"}
 DENY_PATTERNS = (
     r"\brm\s+(?:--?[\w-]+\s+)+(?:/\*?|~/?|\$(?:HOME|\{HOME\})/?)(?=\s|[;&|]|$)",
+    # Obvious root/home find deletion, including common traversal options.
+    r"\bfind\s+(?:(?:-[HLP]|-O\d+)\s+)*(?:/\*?|~/?|\$(?:HOME|\{HOME\})(?:/[^\s;&|]*)?)(?=\s)[^;\n|&]*\s-delete\b",
+    r"\bfind\s+(?:(?:-[HLP]|-O\d+)\s+)*(?:/\*?|~/?|\$(?:HOME|\{HOME\})(?:/[^\s;&|]*)?)(?=\s)[^;\n|&]*\s-exec(?:dir)?\s+(?:/\S*/)?rm\b",
     r"\bsudo\b",
     r"\bmkfs(?:\.\w+)?\b|\bdd\s+[^\n]*\bif=",
     r"\bcurl\b[^|]*\|\s*(?:sh|bash)\b",
