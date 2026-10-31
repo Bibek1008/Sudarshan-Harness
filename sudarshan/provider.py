@@ -44,7 +44,9 @@ def complete(
 
     url = f"{API_ROOT}/{model}:generateContent?key={quote(api_key(), safe='')}"
     response = _post(url, body)
-    parts = response.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+    candidates = response.get('candidates') or []
+    candidate = candidates[0] if candidates else {}
+    parts = (candidate.get('content') or {}).get('parts') or []
     text: list[str] = []
     calls: list[dict[str, Any]] = []
     for part in parts:
@@ -55,7 +57,12 @@ def complete(
             calls.append({"name": call["name"], "args": call.get("args", {}),
                           "signature": part.get("thoughtSignature")})
 
-    metadata = response.get("usageMetadata", {})
+    if not ''.join(text).strip() and not calls:
+        # Only known feedback enums are safe to surface; free-form feedback may echo input.
+        reason = (response.get('promptFeedback') or {}).get('blockReason')
+        safe_reason = reason if reason in {'SAFETY', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'OTHER'} else 'empty or unusable response'
+        raise RuntimeError(f'Gemini returned no usable candidate: {safe_reason}')
+    metadata = response.get("usageMetadata") or {}
     return {"text": "".join(text), "tool_calls": calls,
             "usage": {"input": metadata.get("promptTokenCount", 0),
                       "output": metadata.get("candidatesTokenCount", 0)}}
