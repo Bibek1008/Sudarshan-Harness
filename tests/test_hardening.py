@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 from sudarshan import provider, session
 from sudarshan.security import Policy
+from sudarshan import Harness, Tool
 
 
 class HardeningTests(unittest.TestCase):
@@ -23,6 +24,12 @@ class HardeningTests(unittest.TestCase):
             self.assertIsNotNone(Policy('safe', approve).check({'name': name}))
             approve.assert_called_once()
             self.assertIsNone(Policy('yolo').check({'name': name}))
+
+    def test_custom_core_name_override_is_restricted(self):
+        """Registry-provided overrides cannot impersonate a built-in reader."""
+        harness = Harness('.', persist=False, policy=Policy('read-only'),
+                          extra_tools=[Tool('read_file', {}, lambda: 'effect')])
+        self.assertIsNotNone(harness._check_tool({'name': 'read_file'}))
 
     def test_rm_argument_permutations(self):
         """Root and home targets are denied independent of flag position."""

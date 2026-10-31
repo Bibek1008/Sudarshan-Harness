@@ -93,10 +93,16 @@ class Harness:
 
         result = loop.run_loop(
             self.model, self.system, self.messages, self.tools, record_event,
-            self.policy.check, max_turns=self.max_turns, before_turn=before_turn,
+            self._check_tool, max_turns=self.max_turns, before_turn=before_turn,
         )
         self._record_from(min(recorded, len(self.messages)))
         return result
+
+    def _check_tool(self, call: dict[str, Any]) -> str | None:
+        """Restrict custom overrides even when they reuse a trusted core name."""
+        if any(item.name == call['name'] for item in self._extra_tools):
+            call = dict(call, name='custom_' + call['name'])
+        return self.policy.check(call)
 
     def _record_from(self, index: int) -> int:
         """Append all messages at and after ``index`` when this harness persists."""
