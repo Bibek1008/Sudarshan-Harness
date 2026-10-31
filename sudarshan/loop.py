@@ -27,8 +27,7 @@ def run_loop(
     without replacing its list identity.  Event callbacks observe an assistant
     reply and every requested tool, including calls denied by ``before_tool``.
 
-    Raises:
-        RuntimeError: If the model keeps asking for tools beyond ``max_turns``.
+    After the turn budget, request exactly one tool-free final report.
     """
     tool_specs = [tool.spec for tool in tools.values()]
     for _ in range(max_turns):
@@ -64,4 +63,10 @@ def run_loop(
             tool_message = {"role": "tool", "name": name, "text": result}
             messages.append(tool_message)
             on_event("tool_end", tool_message)
-    raise RuntimeError(f"Loop exceeded maximum of {max_turns} turns")
+    messages.append({"role": "user", "text": "Turn limit reached; wrap up now."})
+    reply = provider.complete(model, system, messages, [])
+    # Even a noncompliant provider cannot execute or leave unpaired final calls.
+    assistant = {"role": "assistant", "text": reply["text"], "tool_calls": []}
+    messages.append(assistant)
+    on_event("assistant", assistant)
+    return reply["text"]
