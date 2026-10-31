@@ -3,11 +3,20 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from demos.browser_probe import ChromiumProbe, browser_executable
+from demos.browser_probe import ChromiumProbe, browser_capability_preflight
 
 
-@unittest.skipUnless(browser_executable(), 'Chromium runtime unavailable')
 class BrowserProbeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        capability = browser_capability_preflight()
+        if not capability.available:
+            raise unittest.SkipTest(capability.reason)
+        cls.browser = capability.executable
+
+    def probe(self, config):
+        return ChromiumProbe(config, executable=self.browser)
+
     def setUp(self):
         Path('work').mkdir(exist_ok=True)
         self.tmp = tempfile.TemporaryDirectory(dir=Path('work').resolve())
@@ -29,7 +38,7 @@ class BrowserProbeTests(unittest.TestCase):
 <script>document.documentElement.dataset.theme=localStorage.getItem('theme')||'light';</script></body></html>'''
         index = self.root / 'index.html'
         index.write_text(source)
-        probe = ChromiumProbe({'product': 'artisan-coffee', 'interactions': {
+        probe = self.probe({'product': 'artisan-coffee', 'interactions': {
             'subscription_toggle': {'button': '#billing', 'target': '#price'},
             'brew_tabs': {'button': '#brew', 'target': '#guide'},
             'faq': {'button': '#faq', 'target': '#answer', 'attribute': 'hidden'},
@@ -53,7 +62,7 @@ document.addEventListener('keydown',e=>{if(e.key==='p'){state.paused=!state.paus
 if(e.key==='ArrowRight'&&!state.paused){state.head.x++;state.foods++;state.score++;
 if(state.foods%5===0)state.interval-=20;state.highScore=Math.max(state.highScore,state.score);localStorage.setItem('best',state.highScore);}});
 </script></body>''')
-        result = ChromiumProbe({'product':'viper', 'snapshot':'window.snapshot()',
+        result = self.probe({'product':'viper', 'snapshot':'window.snapshot()',
                                 'food_keys':['ArrowRight']*5, 'step_ms':100,
                                 'restart':'#restart'})(index, 768)
         self.assertEqual(len(result['checks']), 6)
@@ -64,7 +73,7 @@ if(state.foods%5===0)state.interval-=20;state.highScore=Math.max(state.highScore
         index.write_text('''<canvas></canvas><button id="restart">Restart</button><script>
 window.snapshot=()=>({head:{x:0,y:0},foods:0,score:0,interval:200,paused:false,highScore:0});
 </script>''')
-        result = ChromiumProbe({'product':'viper', 'snapshot':'window.snapshot()',
+        result = self.probe({'product':'viper', 'snapshot':'window.snapshot()',
                                 'food_keys':['ArrowRight']*5, 'step_ms':50,
                                 'restart':'#restart'})(index, 768)
         self.assertFalse(result['checks']['keyboard_movement'])

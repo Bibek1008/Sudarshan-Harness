@@ -243,3 +243,19 @@ No browser engine is bundled. The optional standard-library ChromiumProbe now
 executes deterministic fixture checks in installed headless Edge/Chrome. See
 LIVE_BUILD_READINESS.md for configuration, observed coverage and limitations.
 These fixture observations are not live-product acceptance.
+
+Browser-dependent tests run `browser_capability_preflight()` once before their
+class executes. The preflight loads a controlled local page with the same
+filtered environment, temporary profile, secure arguments and browser sandbox
+as the actual probe. It tries discovered installations without disabling sandbox
+security. The returned `BrowserCapability` includes `available`, `executable`
+and the launch reason. A missing executable, refused launch, timeout or absent
+controlled DOM observation makes the runtime unavailable; unittest reports the
+specific reason and skips only the browser test class. Browser-independent
+regressions still run. Unexpected adapter errors remain errors.
+
+After preflight succeeds, the selected executable is retained for the viewport
+and Viper fixtures. No subsequent assertion, observation error or product
+failure is converted into a skip. Root/container environments must provide a
+browser configuration that supports its sandbox to run these tests; the suite
+never weakens browser security to make them pass.

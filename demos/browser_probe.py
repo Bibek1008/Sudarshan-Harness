@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+from dataclasses import dataclass
 from html import unescape
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -21,16 +22,64 @@ from sudarshan.environment import safe_shell_environment
 
 
 def browser_executable():
+    return next(iter(browser_executables()), None)
+
+
+def browser_executables():
+    """List installed candidates so one broken installation cannot hide another."""
+    candidates = []
     for name in ('chromium', 'google-chrome', 'chrome', 'msedge'):
         found = shutil.which(name)
-        if found:
-            return found
+        if found and found not in candidates:
+            candidates.append(found)
     for variable in ('PROGRAMFILES', 'PROGRAMFILES(X86)', 'LOCALAPPDATA'):
         for suffix in ('Microsoft/Edge/Application/msedge.exe', 'Google/Chrome/Application/chrome.exe'):
             candidate = Path(os.environ.get(variable, '/nonexistent')) / suffix
-            if candidate.is_file():
-                return str(candidate)
-    return None
+            if candidate.is_file() and str(candidate) not in candidates:
+                candidates.append(str(candidate))
+    return candidates
+
+
+class BrowserRuntimeUnavailable(RuntimeError):
+    """The browser could not launch securely; never disables its sandbox."""
+
+
+class BrowserObservationUnavailable(ValueError):
+    """No controlled page observation was returned."""
+
+
+@dataclass(frozen=True)
+class BrowserCapability:
+    available: bool
+    executable: str | None
+    reason: str
+
+
+def browser_capability_preflight(executable=None):
+    """Launch a controlled page with the same secure options as real probes.
+
+    This tests runtime capability only, not any product. Consumers may skip
+    browser tests based on this result, but must not skip later assertions.
+    """
+    explicit = executable is not None
+    executable = executable or browser_executable()
+    if not executable:
+        return BrowserCapability(False, None, 'Secure Chromium unavailable: no browser executable found')
+    parent = Path('work').resolve()
+    parent.mkdir(exist_ok=True)
+    reasons = []
+    candidates = [executable] if explicit else list(dict.fromkeys([executable, *browser_executables()]))
+    with tempfile.TemporaryDirectory(dir=parent) as directory:
+        page = Path(directory) / 'index.html'
+        page.write_text('<!doctype html><html><body><p>Capability fixture</p></body></html>', encoding='utf-8')
+        for candidate in candidates:
+            try:
+                ChromiumProbe({'product': 'capability'}, candidate)(page, 768)
+            except (BrowserRuntimeUnavailable, BrowserObservationUnavailable) as error:
+                reasons.append(f'{candidate}: {error}')
+            else:
+                return BrowserCapability(True, candidate, 'Secure Chromium launch and controlled page observation succeeded')
+    return BrowserCapability(False, executable, 'Secure Chromium unavailable; ' + ' | '.join(reasons))
 
 
 SCRIPT = r'''
@@ -164,7 +213,8 @@ class ChromiumProbe:
         parent.mkdir(exist_ok=True)
         try:
             with tempfile.TemporaryDirectory(dir=parent) as profile:
-                completed = subprocess.run([
+                try:
+                    completed = subprocess.run([
                     self.executable, '--headless', '--disable-gpu', '--no-first-run',
                     '--no-default-browser-check', '--disable-background-networking',
                     '--no-proxy-server',
@@ -174,10 +224,18 @@ class ChromiumProbe:
                     '--virtual-time-budget=8000', '--dump-dom',
                     f'http://127.0.0.1:{server.server_port}/runner'],
                     env=safe_shell_environment(), capture_output=True, text=True,
-                    encoding='utf-8', errors='replace', timeout=40)
+                        encoding='utf-8', errors='replace', timeout=40)
+                except subprocess.TimeoutExpired as error:
+                    raise BrowserRuntimeUnavailable('secure browser launch/page load timed out after 40 seconds') from error
+                except OSError as error:
+                    raise BrowserRuntimeUnavailable(f'{type(error).__name__}: {error}') from error
+                if completed.returncode:
+                    raise BrowserRuntimeUnavailable(
+                        f'exit {completed.returncode}; stderr: {completed.stderr.strip()[-2000:] or "(empty)"}')
                 match = re.search(r'<pre id="sudarshan-probe-result">(.*?)</pre>', completed.stdout, re.S)
-                if completed.returncode or not match:
-                    raise ValueError('Chromium probe failed to produce observations')
+                if not match:
+                    raise BrowserObservationUnavailable(
+                        'controlled DOM observation missing; stderr: ' + (completed.stderr.strip()[-2000:] or '(empty)'))
                 result = json.loads(unescape(match[1]))
                 if 'error' in result:
                     raise ValueError('Browser scenario failed: ' + result['error'])
