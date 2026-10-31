@@ -65,3 +65,20 @@ class AuditRepairs(unittest.TestCase):
         rules = Path('.gitignore').read_text().splitlines()
         self.assertIn('.sudarshan/', rules)
         self.assertNotIn('.odysseus/', rules)
+
+    def test_malformed_commands_fail_closed(self):
+        """Missing input, non-string commands, NUL and unmatched quotes are refused."""
+        for command in (None, 5, '', '\x00', 'echo "unfinished'):
+            self.assertIsNotNone(Policy('yolo').check({'name': 'bash', 'args': {'command': command}}))
+
+    def test_utf8_tail_and_missing_newline(self):
+        """Recovery handles split Unicode and valid JSON without its final newline."""
+        parent = Path('work'); parent.mkdir(exist_ok=True)
+        for suffix in (b'\n{"text":"\xe2', b''):
+            with self.subTest(suffix=suffix), tempfile.TemporaryDirectory(dir=parent) as tmp:
+                path = Path(tmp) / 'session.jsonl'
+                message = {'role': 'user', 'text': 'valid'}
+                path.write_bytes(json.dumps(message).encode() + suffix)
+                self.assertEqual(session.load(path), [message])
+                session.append(path, {'role': 'user', 'text': 'next'})
+                self.assertEqual(len(session.load(path)), 2)
