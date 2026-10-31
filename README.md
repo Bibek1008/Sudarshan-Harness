@@ -94,7 +94,7 @@ They cover common destructive rm, sudo, mkfs, dd, curl-to-shell, force-push,
 and disk-device redirection forms. Malformed command quoting is refused.
 Root/home `find` deletion is also hard-denied: for example `find / -delete`,
 `find -L / -type f -delete`, `find "$HOME" -delete`, and
-`find / -exec rm {} \\;` (also `-execdir`). The rules recognize common
+`find / -exec rm {} \;` (also `-execdir`). The rules recognize common
 `-H`, `-L`, `-P` and `-O` options, quotes and chained commands. Local cleanup
 such as `find ./scratch -type f -delete` still follows the selected policy.
 Regex and token checks cannot establish arbitrary shell safety.

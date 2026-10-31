@@ -1,90 +1,116 @@
-# Audit and repair delivery — partial acceptance
+# SUDARSHAN engineering report — current cleanup
 
-## A. Core harness
+## Implementation milestones
 
-Provider serialization, thought signatures, key precedence, usage and retries:
-covered by offline tests; live Gemini unverified. Loop and filesystem tools:
-tested with real local effects and mocked replies. Context, memory and skills:
-existing plumbing tests pass; mocked responses do not prove model compliance.
-Sessions: torn-byte truncation, durable synthetic responses, idempotence and
-continuation covered. Subagents: existing ephemeral-child tests pass. Harness:
-existing registration/resume/persistence paths pass. CLI: defaults, headless,
-approval, interrupt and single-output behavior tested. Fleet: actual three-thread
-barrier verifies concurrency and ordered error/success results. Local execution:
-tested. SSH and Docker: mocked only, with unresolved risks below.
+Existing architecture and Git history are preserved on main.
+Earlier repairs include c3a65c8 (trusted read classification), a7f08de (rm inspection),
+0845b73 (API-key naming), ba567cf (session collisions), fdfee7f (empty candidates),
+968d4c8 (execution boundaries/dice), b829b1b (custom overrides), and c685647
+(credential-safe provider errors and sandbox configuration).
+e5519f6 introduced shared shell environment filtering; 067ed56 established safe
+defaults and documented explicit yolo risks.
 
-## B. Critical repairs
+This cleanup adds root/home find denial patterns and two regression methods in
+tests/test_find_denials.py (commit 8d61c87). It refreshes AUDIT.md,
+ENGINEERING_REPORT.md and HARDENING_REPORT.md to remove stale source claims.
+No provider, CLI default or product-builder implementation was rewritten.
 
-All four were reproduced with failing tests before implementation.
+## Regression coverage
 
-| Defect | Root cause and correction | Regression result |
-| --- | --- | --- |
-| Turn limit raised | Terminal raise replaced with wrap-up user message and exactly one tool-free call; unsolicited final calls discarded | Passed |
-| Quoted HOME deletion allowed | Raw regex did not match quoting/root globs; normalize quotes for inspection, validate input/quoting, expand destructive target patterns | Passed across all three modes, before approval |
-| Recovery not durable | load repaired only its return value; now truncate invalid bytes, fsync valid boundary, append/fsync missing results | Passed including repeated load and continuation |
-| Wrong ignored directory | .odysseus replaced by .sudarshan | Test and git check-ignore passed for nested project sessions |
+| Area | Evidence |
+| --- | --- |
+| Permissions and rm denial | test_hardening.py, test_audit_repairs.py, execution integration tests |
+| find root/home denials and legitimate commands | test_find_denials.py, all policy modes before approval |
+| Environment and descendants | test_shell_environment.py, real shell probes with fixture credentials |
+| Safe defaults, explicit yolo and hard denial | test_policy_defaults.py, test_cli_fleet.py |
+| Provider parsing, keys, signatures and error secrecy | test_provider_audit.py, test_hardening.py, test_final_boundaries.py |
+| Collision resistance and durable recovery | test_session.py, test_hardening.py, test_audit_repairs.py |
+| Execution runtimes and original dice demo | execution test modules and test_backend_hardening.py |
 
-CLI additionally fixes duplicate final printing, empty -p interpretation and
-headless interrupt exit 130. Public API names remain unchanged.
+The local product-preparation test and product_fleet.py changes predate this cleanup
+and remain outside its commits. The fixture uses a mocked provider and explicit
+fixture approval. Local and committed suites may therefore have different counts.
+Refer to AUDIT.md for current backend limitations; historical resolved defects
+are no longer presented as open work.
 
-## C. Security
+## Verification evidence
 
-Hard-deny covers requested rm flag/quote/root forms, sudo, mkfs, dd if=,
-curl piped to sh/bash, force push and device redirection. Malformed input fails
-closed. Policy permits read tools, asks for effects in safe mode, and preserves
-hard-deny in yolo. This is conservative inspection, not complete shell parsing.
-Untrusted custom tool registration is not safe; suffix aliasing can classify a
-custom tool as read-only. Local/SSH cwd does not confine shell permissions.
-Resolve/open races, SSH option-like host validation, Docker timeout cleanup and
-remote process termination remain hardening work. Docker is defense in depth.
-No claim of production readiness is made.
+- User-supplied verification result (environment not reproduced here): **73 passed, 0 failures,
+  0 skipped**. This is supplied evidence, not an execution reproduced in this checkout.
+- Latest local execution after the find regressions: **76 discovered, 75 passed,
+  0 failures, 1 skipped** (Python 3.12 on Windows).
+- The skipped symlink escape test raises Windows error 1314 because symlink creation
+  privileges are unavailable. It is not counted as passed.
+- Full command: `python -m unittest discover -v`; verbose log: cleanup-test-results.txt.
+  The local discovery includes the pre-existing untracked product-preparation fixture.
+- `python -m compileall -q sudarshan demos tests`: passed.
+- `python -m sudarshan --help`: passed; help reports safe as the default.
+- `git diff --check`: passed.
+- `git check-ignore .sudarshan/sessions/test-session.jsonl`: returned the expected path.
+- No existing tests were removed, suppressed or converted from skips to passes.
 
-## D. Executed checks
+## Credential and shell environment
 
-Baseline: 35 discovered, 34 passed, 0 failed, 1 skipped.
-Final: 54 discovered, 53 passed, 0 failed, 1 skipped.
-Skip: Windows lacks privilege to create a real symlink.
-Commands: python -m unittest discover -q; python -m sudarshan --help;
-git diff --check; git check-ignore on nested session path.
-CLI imports work. Product runner compiles; actual invocation fails at missing
-credential preflight, before creating workspaces. No live provider, SSH or
-Docker integration was run. Required coverage is improved but not exhaustive;
-additional harness compaction, custom-tool, backend lifecycle and session
-collision tests are still needed.
+Gemini credential precedence is **SUDARSHAN_API_KEY**, then legacy
+ODYSSEUS_API_KEY, then generic GEMINI_API_KEY. Empty values fall back.
+Tests mock the environment and require no actual key.
 
-## E. Product results
+Core Bash and LocalExecutionBackend both use safe_shell_environment() from
+sudarshan/environment.py. Only PATH, PATHEXT, COMSPEC, SYSTEMROOT, WINDIR,
+TEMP and TMP are inherited, with case-insensitive name matching. All other
+parent variables are excluded, including provider API keys, unknown credentials,
+agent sockets, HOME/USERPROFILE and shell/Python startup-hook variables.
+The parent environment is not mutated; provider authentication remains available.
+Real-shell tests check direct children and descendants with synthetic credentials.
 
-| Project | Pass/Fail | Build turns | Review turns | Contents |
-|---|---|---:|---:|---|
-| artisan-coffee | Fail — not built | 0 | 0 | No generated product |
-| taskman | Fail — not built | 0 | 0 | No generated product |
-| viper | Fail — not built | 0 | 0 | No generated product |
+This is environment filtering, not credential isolation from the OS account.
+Allowed runtime paths must be trusted. Files, shell startup configuration, command
+arguments and OS services can still expose secrets. No assertion of complete shell
+security or sandboxing follows from the allowlist.
 
-Zero turns reflect credential preflight failure, not successful empty runs.
-demos/product_fleet.py prepares the required verbatim skills, independent
-workdirs, persistent sessions, build/review fleet phases and turn recording.
-The runner itself has not completed a live run. No product or review pass is
-claimed. Independent HTML-aware counting, browser controls/game checks and
-Taskman subprocess testing remain required, followed by another repair pass
-for every failed product.
+## CLI contract and approval risk
 
-## F. New Git milestones
+Current source defaults to safe for Policy(), Harness(), and interactive and
+headless CLI runs. This cleanup does not change that contract. The earlier
+headless yolo default was explicitly changed in commit 067ed56 and is historical.
+Scripts should specify --mode explicitly when depending on approval behavior.
 
-- 8ec5312: loop wrap-up, initial audit, defect reproductions.
-- 590e8eb: conservative command denial fixes.
-- f91b4c3: durable session repair.
-- a98d802: correct session ignore rules.
-- 19eeee8: CLI fixes, provider and concurrent fleet regressions.
-- 262ca85: loop and filesystem tool regressions.
-- Final documentation/preparation commit: this report, expanded README,
-  live product fleet runner, malformed-command and UTF-8 recovery tests.
+**Headless --mode yolo skips approval for ordinary operations and is not a sandbox.**
+It retains hard-deny checks but does not restrict filesystem, network or process
+access. Safe also provides approval checks rather than OS isolation. Without a
+library approver, restricted operations are declined; CLI EOF/blank approval is
+declined. Raw backend methods require caller policy enforcement.
 
-## G. Remaining work
+## Destructive-command inspection
 
-Configure a replacement Gemini key locally; a credential posted in chat should
-be revoked and is not copied into this repository. Execute live builds/reviews,
-verify products independently, run any required additional review, record real
-turn counts and commit accepted products. Resolve the security and coverage
-gaps listed above. Also address second-resolution session-name collisions,
-provider empty candidates, skill front-matter scope and recovery of historical
-incomplete call sequences. Final acceptance has NOT been achieved.
+Hard-deny rules precede approval in safe, read-only and yolo. Existing rules cover
+broad rm root/home variants, sudo, mkfs, dd if=, curl piped to sh/bash,
+git push --force and redirection to /dev/sd devices.
+
+New documented patterns cover obvious root/home find deletion, including
+find / -delete, find -L / -type f -delete, quoted root/HOME forms, root globs,
+and find / -exec rm or -execdir rm. Common -H/-L/-P/-O options and chained
+commands are covered by regression tests; backend Bash suffixes cannot bypass
+these denials. Local find ./scratch -type f -delete and root listing still
+follow ordinary policy. Tests inspect dangerous strings; they do not execute deletion.
+
+Inspection uses conservative regular expressions and shell tokenization, not a
+complete shell parser. It can produce false positives and can miss alternate
+path spellings, multiple roots, aliases, shell expansions, nested interpreters,
+indirect execution and other destructive programs. It never proves arbitrary
+commands safe and does not normalize the actual executed command. Untrusted
+commands need appropriately isolated OS execution.
+
+## Product acceptance
+
+| Product | Live build/review evidence | Independent verification | Status |
+| --- | --- | --- | --- |
+| Artisan Coffee | Not established | Not completed | Incomplete |
+| Taskman | Not established | Not completed | Incomplete |
+| Viper | Not established | Not completed | Incomplete |
+
+No live product fleet was run for this cleanup. Mocked orchestration tests prove
+session/skill/event plumbing only. No provider, SSH, Docker or browser integration
+was performed. Product counts, responsive layouts, controls, generated Taskman
+tests and Viper gameplay remain unverified. No product result or turn count is
+fabricated. Production readiness is not established.

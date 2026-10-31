@@ -1,38 +1,117 @@
-# Audit at cd4e807
+# SUDARSHAN current audit — 31 October 2026
 
-Inspected tracked package modules, tests, demos, README, ignore rules, history,
-and execution backends. Existing checkout is the cumulative `sudarshan` Git
-repository; no separate `Sudarshan-Harness-main` upload was present.
+This report describes current source rather than treating repaired historical
+findings as outstanding defects. Earlier snapshots remain in Git history.
 
-Baseline: Python 3.12.10, 35 discovered tests, 34 passed, one Windows symlink
-privilege skip. Worktree was clean. No Gemini credential is configured.
+## Current repairs
 
-Working under existing tests: basic loop/tool integration, compaction wiring,
-memory injection, skill loading, child construction, fleet success smoke check,
-local execution and mocked SSH/Docker operation construction.
+Exact core read identities are trusted; suffixes and custom overrides do not
+inherit read authority. Exclusive session creation prevents frozen-second filename
+collisions while preserving slug limits and append/load/latest behavior. Session
+recovery durably handles torn tails and incomplete tool-call suffixes. Provider
+parsing rejects empty/unusable candidates, retains valid responses/signatures and
+usage defaults, and avoids echoing raw HTTP bodies or network exceptions.
+The original dice Tool demonstration is restored and has import/execution coverage.
 
-Reproduced before repair: turn exhaustion raises instead of wrapping up;
-quoted HOME and root glob deletion bypass denial; load repairs only in memory
-and retains invalid JSON; `.odysseus/` is ignored instead of `.sudarshan/`.
+## Execution backend review
 
-Additional findings: duplicate CLI final output; empty headless prompt selects
-interactive mode; skills descriptions are parsed outside front matter; session
-names can collide within a second; empty provider candidates cause IndexError.
+- Local filesystem operations resolve traversal/symlink targets, with a remaining
+  resolve/open race. Shell cwd is not confinement. Descendant processes can outlive
+  a shell timeout. Custom Python tools remain trusted application code.
+- SSH validates connection tokens, uses strict host-key checking and quotes remote
+  helper arguments. Remote cwd is not isolation; timeout/disconnect does not prove
+  remote process termination. Tests use mocks, not a live host.
+- Docker uses no network, a read-only root, dropped capabilities, no-new-privileges,
+  non-root defaults, CPU/memory limits and a workspace mount. It rejects option-like
+  image names, explicit root configurations and comma-ambiguous mount paths.
+  Timeout cleanup targets the generated container name and reports unconfirmed
+  cleanup. It never falls back to local execution.
+- Docker is not an absolute guarantee: shared kernel, daemon authority, selected
+  images, mount contents and cleanup/runtime failure remain relevant. A named
+  container user must resolve to a nonzero UID; configuration cannot prove that.
+- Policy cannot authenticate arbitrary Python callable identities from a name alone.
+  Harness handles registered custom overrides; direct callers remain responsible.
+- Sessions are single-writer; exact modification-time ties in latest() have no
+  defined ordering. A repaired interruption record does not prove no prior effect.
 
-Security limitations: shell working directories are not OS confinement. Local
-and SSH shell commands can access their account's permissions outside the root.
-Regex inspection is incomplete shell analysis. File resolve/open operations have
-race windows. SSH host tokens beginning with '-' need validation. Docker timeout
-currently kills the client without guaranteed container cleanup. Raw backend
-calls do not invoke Policy. Arbitrary suffix-based policy read aliases are unsafe
-for untrusted custom tool registration. These require separate hardening before
-production use; passing unit tests is not a security certification.
+## Verification evidence
 
-Missing coverage: dedicated provider, core tools, CLI, fleet concurrency and
-durable recovery regressions. Earlier '35 passed, 1 skipped' reports were wrong:
-35 was the total, including the skip. Scripted pirate/memory replies demonstrate
-prompt plumbing only, not live model compliance.
+- User-supplied verification result (environment not reproduced here): **73 passed, 0 failures,
+  0 skipped**. This is supplied evidence, not an execution reproduced in this checkout.
+- Latest local execution after the find regressions: **76 discovered, 75 passed,
+  0 failures, 1 skipped** (Python 3.12 on Windows).
+- The skipped symlink escape test raises Windows error 1314 because symlink creation
+  privileges are unavailable. It is not counted as passed.
+- Full command: `python -m unittest discover -v`; verbose log: cleanup-test-results.txt.
+  The local discovery includes the pre-existing untracked product-preparation fixture.
+- `python -m compileall -q sudarshan demos tests`: passed.
+- `python -m sudarshan --help`: passed; help reports safe as the default.
+- `git diff --check`: passed.
+- `git check-ignore .sudarshan/sessions/test-session.jsonl`: returned the expected path.
+- No existing tests were removed, suppressed or converted from skips to passes.
 
-Day 5 missing: all three generated products, design skill in their workdirs,
-actual build/review turns, same-session review evidence and browser interaction
-verification. These cannot be marked passed using scripted provider output.
+## Credential and shell environment
+
+Gemini credential precedence is **SUDARSHAN_API_KEY**, then legacy
+ODYSSEUS_API_KEY, then generic GEMINI_API_KEY. Empty values fall back.
+Tests mock the environment and require no actual key.
+
+Core Bash and LocalExecutionBackend both use safe_shell_environment() from
+sudarshan/environment.py. Only PATH, PATHEXT, COMSPEC, SYSTEMROOT, WINDIR,
+TEMP and TMP are inherited, with case-insensitive name matching. All other
+parent variables are excluded, including provider API keys, unknown credentials,
+agent sockets, HOME/USERPROFILE and shell/Python startup-hook variables.
+The parent environment is not mutated; provider authentication remains available.
+Real-shell tests check direct children and descendants with synthetic credentials.
+
+This is environment filtering, not credential isolation from the OS account.
+Allowed runtime paths must be trusted. Files, shell startup configuration, command
+arguments and OS services can still expose secrets. No assertion of complete shell
+security or sandboxing follows from the allowlist.
+
+## CLI contract and approval risk
+
+Current source defaults to safe for Policy(), Harness(), and interactive and
+headless CLI runs. This cleanup does not change that contract. The earlier
+headless yolo default was explicitly changed in commit 067ed56 and is historical.
+Scripts should specify --mode explicitly when depending on approval behavior.
+
+**Headless --mode yolo skips approval for ordinary operations and is not a sandbox.**
+It retains hard-deny checks but does not restrict filesystem, network or process
+access. Safe also provides approval checks rather than OS isolation. Without a
+library approver, restricted operations are declined; CLI EOF/blank approval is
+declined. Raw backend methods require caller policy enforcement.
+
+## Destructive-command inspection
+
+Hard-deny rules precede approval in safe, read-only and yolo. Existing rules cover
+broad rm root/home variants, sudo, mkfs, dd if=, curl piped to sh/bash,
+git push --force and redirection to /dev/sd devices.
+
+New documented patterns cover obvious root/home find deletion, including
+find / -delete, find -L / -type f -delete, quoted root/HOME forms, root globs,
+and find / -exec rm or -execdir rm. Common -H/-L/-P/-O options and chained
+commands are covered by regression tests; backend Bash suffixes cannot bypass
+these denials. Local find ./scratch -type f -delete and root listing still
+follow ordinary policy. Tests inspect dangerous strings; they do not execute deletion.
+
+Inspection uses conservative regular expressions and shell tokenization, not a
+complete shell parser. It can produce false positives and can miss alternate
+path spellings, multiple roots, aliases, shell expansions, nested interpreters,
+indirect execution and other destructive programs. It never proves arbitrary
+commands safe and does not normalize the actual executed command. Untrusted
+commands need appropriately isolated OS execution.
+
+## Product acceptance
+
+| Product | Live build/review evidence | Independent verification | Status |
+| --- | --- | --- | --- |
+| Artisan Coffee | Not established | Not completed | Incomplete |
+| Taskman | Not established | Not completed | Incomplete |
+| Viper | Not established | Not completed | Incomplete |
+
+No live product fleet was run for this cleanup. Mocked orchestration tests prove
+session/skill/event plumbing only. No provider, SSH, Docker or browser integration
+was performed. Product counts, responsive layouts, controls, generated Taskman
+tests and Viper gameplay remain unverified. No product result or turn count is
+fabricated. Production readiness is not established.
