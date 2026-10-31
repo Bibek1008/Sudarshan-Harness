@@ -26,7 +26,10 @@ class Policy:
 
     ``read-only`` permits only the named read tools.  ``safe`` asks its
     approver before every effect, and ``yolo`` permits effects but never the
-    small set of permanently denied shell commands.
+    small set of permanently denied shell commands. Safe is the default.
+    No policy mode is a sandbox: yolo only skips approval, and approved shell
+    commands retain the OS account's filesystem, network and process access.
+    Hard-deny inspection is incomplete; use OS isolation for untrusted code.
     """
 
     def __init__(

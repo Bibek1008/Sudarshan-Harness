@@ -36,11 +36,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("-p", "--prompt")
     parser.add_argument("-d", "--workdir", default=".")
     parser.add_argument("-m", "--model")
-    parser.add_argument("--mode", choices=("safe", "yolo", "read-only"))
+    parser.add_argument("--mode", choices=("safe", "yolo", "read-only"), default="safe",
+                        help="approval policy (default: safe); yolo skips approval and is not a sandbox")
     parser.add_argument("--resume", nargs="?", const="")
     parser.add_argument("--max-turns", type=int, default=120)
     args = parser.parse_args(argv)
-    mode = args.mode or ("yolo" if args.prompt is not None else "safe")
+    mode = args.mode
     harness = Harness(args.workdir, model=args.model, policy=Policy(mode, _approver if mode == "safe" else None), on_event=_event, max_turns=args.max_turns)
     if args.resume is not None and not harness.resume(args.resume or None):
         print("No session available to resume.")
@@ -51,7 +52,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             print("\nInterrupted; the session log is safe and --resume continues it.")
             raise SystemExit(130)
         return
-    print(f"Sudarshan · model={harness.model} · mode={mode} · jail={harness.workdir}")
+    print(f"Sudarshan · model={harness.model} · mode={mode} · workdir={harness.workdir}")
     while True:
         try:
             task = input("sudarshan> ").strip()

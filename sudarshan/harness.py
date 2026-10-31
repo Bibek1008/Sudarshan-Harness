@@ -37,7 +37,7 @@ class Harness:
         self.workdir = Path(workdir).resolve()
         self.workdir.mkdir(parents=True, exist_ok=True)
         self.model = model or os.environ.get("ODYSSEUS_MODEL") or provider.DEFAULT_MODEL
-        self.policy = policy or Policy("yolo")
+        self.policy = policy if policy is not None else Policy("safe")
         self.system_extra = system_extra
         self.on_event = on_event or (lambda kind, payload: None)
         self.budget_tokens = budget_tokens

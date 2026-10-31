@@ -17,7 +17,7 @@ class FrontDoorTests(unittest.TestCase):
         """An explicitly provided empty task still selects headless defaults."""
         with patch.object(cli, 'Harness') as factory:
             cli.main(['-p', '', '--resume', 'saved.jsonl'])
-        self.assertEqual(factory.call_args.kwargs['policy'].mode, 'yolo')
+        self.assertEqual(factory.call_args.kwargs['policy'].mode, 'safe')
         factory.return_value.run.assert_called_once_with('')
         factory.return_value.resume.assert_called_once_with('saved.jsonl')
 

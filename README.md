@@ -7,14 +7,15 @@ sessions, delegation, and orchestration.
 
 Clone the repository and run from its root; no pip install is required. On
 systems where Python is named `python3`, substitute that for `python` below.
-Gemini requests use `ODYSSEUS_API_KEY`, falling back to `GEMINI_API_KEY`.
+Gemini requests use `SUDARSHAN_API_KEY`, then legacy `ODYSSEUS_API_KEY`
+(backward compatibility), then generic `GEMINI_API_KEY`. Empty values fall back.
 Set credentials in your local environment, never in source or session prompts.
 The default model is `gemini-3.1-pro-preview`; override with `-m` or
 `ODYSSEUS_MODEL`. API access and usage billing are separate from this package.
 
 ## Run it
 
-Set `ODYSSEUS_API_KEY` (or `GEMINI_API_KEY`) before running. From the repository
+Set `SUDARSHAN_API_KEY` in your local environment before running. From the repository
 root, use one of these forms:
 
 ```bash
@@ -23,8 +24,11 @@ python -m sudarshan -p "Inspect this project and summarize it" -d .
 python -m sudarshan --resume
 ```
 
-The first form is interactive. Headless `-p` runs one task and defaults to the
-`yolo` policy; interactive mode defaults to `safe` and asks before effects.
+The first form is interactive. Headless `-p` runs one task. Both forms and
+`Harness()` default to `safe`, which asks before non-read tools. Without an
+approver, the library refuses these operations; CLI EOF or a blank response
+also refuses approval. Unattended execution requires an explicit policy choice.
+Use `--mode yolo` only when you intend to skip approval.
 `--resume` restores the newest durable JSONL session or accepts a session path.
 
 | Day | Architecture |
@@ -74,7 +78,13 @@ concurrently and returns name/ok/report dictionaries in input order. Jobs have
 ## Security and execution
 
 `safe` asks before non-read tools; `read-only` blocks them; `yolo` allows them.
-Hard-deny rules run first in every mode, including backend-prefixed tools.
+`Policy("yolo")` is not a sandbox. It skips approval while preserving hard-deny
+checks; it does not confine files, processes or network access. Safe mode also
+provides approval checks rather than OS isolation.
+Hard-deny rules run first in every mode, including backend-prefixed shell tools.
+Only the exact core read identities bypass approval. Custom and backend read
+names default to restricted; suffixes grant no trust. Harness also restricts
+custom tools that override a built-in reader's name.
 They cover common destructive rm, sudo, mkfs, dd, curl-to-shell, force-push,
 and disk-device redirection forms. Malformed command quoting is refused.
 Regex and token checks cannot establish arbitrary shell safety.
@@ -84,12 +94,27 @@ account's permissions. A cwd is not a sandbox. Resolve/open race windows remain.
 Use only trusted workspaces and inspect commands; untrusted code needs separate
 OS isolation. Policy applies through the loop/tool adapter, not raw backend calls.
 
+Core Bash and the local execution backend share a minimal inherited environment:
+only `PATH`, `PATHEXT`, `COMSPEC`, `SYSTEMROOT`, `WINDIR`, `TEMP` and `TMP`
+(matched without case sensitivity). Every other parent variable is excluded,
+including `SUDARSHAN_API_KEY`, legacy `ODYSSEUS_API_KEY`, `GEMINI_API_KEY`,
+unrelated credentials, agent sockets and shell/Python startup hooks. The provider
+keeps its own environment; filtering does not remove its configured API key.
+The allowlist is defined in `sudarshan/environment.py`; there is no automatic
+pass-through for additional variables. Programs that require other settings must
+receive them through a deliberately reviewed configuration change.
+
+Allowed runtime values and executable lookup paths must be trusted. Filtering
+prevents credential inheritance, not access to secrets in files, command text,
+OS services or shell startup files. It does not make local commands a sandbox.
+
 `execution/` supplies a registry, structured results, local operations, SSH
 operations (system SSH with strict known-host checking and remote Python file
 validation), and a Docker backend. Docker uses no network, a read-only root,
 dropped capabilities and a designated workspace mount. Docker and SSH are
 external runtimes, not Python dependencies. Containers are not an absolute
-security guarantee; timeout cleanup and remote process lifetime need further
+security guarantee. Docker timeout cleanup targets the exact named container and
+reports unconfirmed cleanup. Remote process lifetime still needs further
 hardening. See AUDIT.md for unresolved risks.
 
 ## Verification and live product proof

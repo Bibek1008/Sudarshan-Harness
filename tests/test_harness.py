@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import sudarshan.loop as loop
 from sudarshan.harness import Harness
+from sudarshan.security import Policy
 from sudarshan.session import append, new_session
 
 
@@ -31,7 +32,7 @@ class HarnessTests(unittest.TestCase):
             _call("write_file", {"path": "note.txt", "content": "saved"}),
             _final("created note"),
         ])
-        harness = Harness(self.root, enable_subagents=False)
+        harness = Harness(self.root, enable_subagents=False, policy=Policy('safe', lambda *args: True))
         with patch.object(loop.provider, "complete", side_effect=lambda *args: next(replies)):
             self.assertEqual(harness.run("create a note"), "created note")
         self.assertIsNotNone(harness.session_path)
@@ -49,7 +50,7 @@ class HarnessTests(unittest.TestCase):
         append(path, {"role": "assistant", "text": "", "tool_calls": calls})
         (self.root / "part1.txt").write_text("part 1", encoding="utf-8")
         append(path, {"role": "tool", "name": "write_file", "text": "Wrote part1.txt"})
-        harness = Harness(self.root, enable_subagents=False)
+        harness = Harness(self.root, enable_subagents=False, policy=Policy('safe', lambda *args: True))
         self.assertTrue(harness.resume())
         self.assertIn("Interrupted before this ran", harness.messages[-1]["text"])
         replies = iter([
@@ -86,7 +87,7 @@ assert slugify('UP DOWN') == 'up-down'
             _call("bash", {"command": "python3 test_utils.py"}),
             _final("Both child reports succeeded and I ran the tests."),
         ])
-        harness = Harness(self.root)
+        harness = Harness(self.root, policy=Policy('safe', lambda *args: True))
         with patch.object(loop.provider, "complete", side_effect=lambda *args: next(replies)):
             answer = harness.run("Use spawn_agent twice, then run python3 test_utils.py yourself and report.")
         self.assertIn("ran the tests", answer)
