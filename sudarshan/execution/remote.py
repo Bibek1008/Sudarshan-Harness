@@ -6,6 +6,7 @@ where paths are resolved against the remote root rather than trusted locally.
 """
 
 import shlex
+import re
 import shutil
 import subprocess
 import time
@@ -145,7 +146,8 @@ def createRemoteReadOps(host: str, **options: object) -> RemoteExecutionBackend:
 
 def _connection_value(value: str, label: str) -> str:
     """Reject control characters and whitespace in SSH connection components."""
-    if not value or any(character.isspace() or character == "\x00" for character in value):
+    if (not value or value.startswith('-')
+            or not re.fullmatch(r'[A-Za-z0-9_./:@%\[\]-]+', value)):
         raise ValueError(f"SSH {label} must be a non-empty single token")
     return value
 

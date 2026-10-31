@@ -11,6 +11,7 @@ import shlex
 import shutil
 import subprocess
 import time
+import uuid
 from pathlib import Path, PurePosixPath
 
 from .base import (
@@ -89,8 +90,10 @@ class SandboxedExecutionBackend(ExecutionBackend):
         if executable is None:
             raise BackendUnavailable(f"Docker executable {self.docker_executable!r} is unavailable")
         mount = f"type=bind,src={self.root},dst={self.container_workdir},rw"
+        container_name = 'sudarshan-' + uuid.uuid4().hex
         arguments = [
             executable, "run", "--rm",
+            "--name", container_name,
             "--network", "none",
             "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges",
@@ -108,7 +111,15 @@ class SandboxedExecutionBackend(ExecutionBackend):
         try:
             completed = subprocess.run(arguments, capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired as error:
-            raise ExecutionTimeout(f"sandbox command timed out after {timeout}s") from error
+            # Killing the Docker client does not stop its container. Remove our exact name.
+            try:
+                cleanup = subprocess.run([executable, 'rm', '-f', container_name],
+                                         capture_output=True, text=True, timeout=15)
+                if cleanup.returncode and 'No such container' not in cleanup.stderr:
+                    raise ExecutionError(f'container cleanup failed: {container_name}')
+            except (OSError, subprocess.TimeoutExpired, ExecutionError):
+                raise ExecutionTimeout(f'sandbox timed out after {timeout}s; cleanup unconfirmed for {container_name}') from error
+            raise ExecutionTimeout(f"sandbox command timed out after {timeout}s; container removed") from error
         except OSError as error:
             raise BackendUnavailable(f"could not run Docker: {error}") from error
         elapsed = time.perf_counter() - started
