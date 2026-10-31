@@ -27,22 +27,41 @@ No provider, CLI default or product-builder implementation was rewritten.
 | Collision resistance and durable recovery | test_session.py, test_hardening.py, test_audit_repairs.py |
 | Execution runtimes and original dice demo | execution test modules and test_backend_hardening.py |
 
-The local product-preparation test and product_fleet.py changes predate this cleanup
-and remain outside its commits. The fixture uses a mocked provider and explicit
-fixture approval. Local and committed suites may therefore have different counts.
+The product-preparation fixture is now tracked and exercises the actual fleet approval
+factory with a mocked provider. All currently discovered test modules are tracked.
 Refer to AUDIT.md for current backend limitations; historical resolved defects
 are no longer presented as open work.
+
+## Product fleet integration update
+
+- 601cb48 blocks lexical root-equivalent rm/find deletion targets, including
+  /tmp/.. and /var/.., while preserving legitimate local cleanup.
+- c098d16 adds explicit per-project safe-mode approval for core file edits,
+  the required design skill and fixed unittest commands. The test callable uses
+  shell=False, the current interpreter, filtered environment and bounded timeout.
+  Ordinary Harness and CLI defaults are unchanged. Unknown tools, arbitrary
+  shell commands and edits outside the project or to reserved state are refused.
+- 831ca6c separates model completion from artifact gates, records failed projects,
+  adds bounded repair phases and resumes original sessions for review and repair.
+  Every project is independently inspected after the final review. Model reports
+  cannot establish acceptance or clear required external/manual checks.
+- Filesystem tool confinement is not OS isolation. Generated tests still have the
+  host account's authority; a restricted command list cannot make Python safe.
+  HTML checks are static prerequisites, not browser gameplay/layout verification.
+- All integration tests now use the actual approval factory. The orchestration
+  fixture no longer substitutes a permissive Harness policy. It is now tracked.
+- No live Gemini build was attempted. All three products remain incomplete.
 
 ## Verification evidence
 
 - User-supplied verification result (environment not reproduced here): **73 passed, 0 failures,
   0 skipped**. This is supplied evidence, not an execution reproduced in this checkout.
-- Latest local execution after the find regressions: **76 discovered, 75 passed,
+- Latest local execution after fleet integration: **90 discovered, 89 passed,
   0 failures, 1 skipped** (Python 3.12 on Windows).
 - The skipped symlink escape test raises Windows error 1314 because symlink creation
   privileges are unavailable. It is not counted as passed.
-- Full command: `python -m unittest discover -v`; verbose log: cleanup-test-results.txt.
-  The local discovery includes the pre-existing untracked product-preparation fixture.
+- Full command: `python -m unittest discover -v`; verbose log: fleet-integration-test-results.txt.
+  The local discovery includes the now-tracked product-preparation fixture.
 - `python -m compileall -q sudarshan demos tests`: passed.
 - `python -m sudarshan --help`: passed; help reports safe as the default.
 - `git diff --check`: passed.
