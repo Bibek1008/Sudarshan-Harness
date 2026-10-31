@@ -8,8 +8,9 @@ for review. A successful model report is not a mechanical product pass.
 import json
 from pathlib import Path
 
-from sudarshan import Harness, run_fleet
+from sudarshan import run_fleet
 from sudarshan.provider import api_key
+from demos.product_approval import product_harness
 
 
 QUALITY = "A real design system as CSS custom properties; at least 9 distinct sections for a landing page; at least 1,200 words of real copy, no lorem ipsum; at least 4 hand-drawn inline SVG illustrations, one being a product artifact in the hero; at least 3 working interactive behaviors; responsive at 360, 768, and 1280; semantic HTML with focus states; a self-review pass before finishing that counts sections, words, SVGs, and interactions against these minimums and fixes any shortfall."
@@ -60,10 +61,11 @@ def main() -> None:
                 record['turns'] += 1
             if kind == 'tool_end' and payload['name'] == 'use_skill':
                 record['skill_loaded'] = QUALITY in payload['text']
-        harness = Harness(workdir, on_event=event, enable_subagents=False,
+        harness = product_harness(workdir, on_event=event,
                           system_extra='Load design-engineering with use_skill before working. Write review findings and verification evidence to REVIEW.md. For non-landing-page tasks use project-specific requirements.')
         if phase == 'review':
-            harness.resume(sessions[name])
+            if not harness.resume(sessions[name]):
+                raise RuntimeError(f'Could not resume build session for {name}')
         else:
             from sudarshan.session import new_session
             harness.session_path = new_session(workdir, name)
@@ -73,9 +75,15 @@ def main() -> None:
 
     jobs = [{'name': n, 'workdir': str(root / n), 'task': t} for n, t in TASKS.items()]
     builds = run_fleet(jobs, lambda directory: factory(directory, 'build'), max_workers=3)
+    for result in builds:
+        if result['ok'] and not evidence[result['name']]['build']['skill_loaded']:
+            result.update(ok=False, report='Build did not load the required design-engineering skill')
     successful = {r['name'] for r in builds if r['ok']}
     review_jobs = [dict(job, task=REVIEW) for job in jobs if job['name'] in successful]
     reviews = run_fleet(review_jobs, lambda directory: factory(directory, 'review'), max_workers=3)
+    for result in reviews:
+        if result['ok'] and not evidence[result['name']]['review']['skill_loaded']:
+            result.update(ok=False, report='Review did not load the required design-engineering skill')
     report = {'builds': builds, 'reviews': reviews, 'evidence': evidence,
               'acceptance': 'Not determined: independently verify products and run additional repair passes on failures.'}
     (root / 'run-evidence.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
