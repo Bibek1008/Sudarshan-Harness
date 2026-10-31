@@ -60,9 +60,13 @@ class LocalExecutionBackendTests(unittest.TestCase):
         try:
             os.symlink(outside, link)
         except OSError as error:
+            outside.unlink(missing_ok=True)
             self.skipTest(f"symlink creation is unavailable: {error}")
-        with self.assertRaises(ExecutionPermissionError):
-            self.backend.read_file("escape.txt")
+        try:
+            with self.assertRaises(ExecutionPermissionError):
+                self.backend.read_file("escape.txt")
+        finally:
+            outside.unlink(missing_ok=True)
 
     def test_output_is_bounded(self) -> None:
         """Very large process output keeps useful context without growing forever."""

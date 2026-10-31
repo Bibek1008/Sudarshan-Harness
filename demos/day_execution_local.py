@@ -6,6 +6,7 @@ returns a readable error instead of reading outside its scratch workspace.
 """
 
 from tempfile import TemporaryDirectory
+from pathlib import Path
 
 from sudarshan.execution.base import backend_tools
 from sudarshan.execution.local import LocalExecutionBackend
@@ -14,7 +15,9 @@ from sudarshan.security import Policy
 
 def main() -> None:
     """Create, execute, read, and boundary-check a local scratch program."""
-    with TemporaryDirectory(prefix="sudarshan-local-") as scratch:
+    scratch_parent = Path("work")
+    scratch_parent.mkdir(exist_ok=True)
+    with TemporaryDirectory(prefix="sudarshan-local-", dir=scratch_parent) as scratch:
         backend = LocalExecutionBackend(scratch)
         tools = {tool.name: tool for tool in backend_tools(backend, "local", Policy("yolo"))}
         source = "print('hello from the local backend')\n"

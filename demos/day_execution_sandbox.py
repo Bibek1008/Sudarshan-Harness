@@ -6,6 +6,7 @@ normal subprocess as a sandbox and catches unavailable-runtime failures.
 """
 
 from tempfile import TemporaryDirectory
+from pathlib import Path
 
 from sudarshan.execution.base import BackendUnavailable, ExecutionTimeout
 from sudarshan.execution.sandbox import SandboxedExecutionBackend
@@ -13,7 +14,9 @@ from sudarshan.execution.sandbox import SandboxedExecutionBackend
 
 def main() -> None:
     """Run a harmless container command and demonstrate its failure modes."""
-    with TemporaryDirectory(prefix="sudarshan-sandbox-") as scratch:
+    scratch_parent = Path("work")
+    scratch_parent.mkdir(exist_ok=True)
+    with TemporaryDirectory(prefix="sudarshan-sandbox-", dir=scratch_parent) as scratch:
         backend = SandboxedExecutionBackend(scratch)
         try:
             print(backend.execute("python -c \"print('hello from sandbox')\"").text())
