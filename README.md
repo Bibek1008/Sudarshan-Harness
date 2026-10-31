@@ -102,6 +102,9 @@ These are conservative patterns, not a shell parser or an exhaustive list of
 destructive programs. Other path spellings, multiple roots, aliases, expansion,
 indirect execution and nested interpreters can evade inspection. False positives
 are also possible. Use an appropriately isolated OS sandbox for untrusted code.
+Lexical root equivalents such as `/tmp/..` and `/var/..` are now rejected for
+both `rm` and destructive `find` forms. This normalization is inspection only;
+it does not resolve remote symlinks or prove any other path safe.
 
 Filesystem tools validate resolved paths, but shell commands use the host
 account's permissions. A cwd is not a sandbox. Resolve/open race windows remain.
@@ -146,3 +149,49 @@ assistant turns and observed skill loads. It has not yet been live-verified;
 generated reports do not establish product acceptance. Browser interaction
 testing, visible-copy counts and Taskman subprocess tests must be checked
 independently. Do not treat the current repository as production hardened.
+
+### Automated product approvals and acceptance
+
+The fleet explicitly constructs `Policy("safe", approver)` for each project;
+ordinary Harness and CLI defaults remain safe. The approver permits only
+project-relative `write_file`/`edit_file`, `use_skill("design-engineering")`,
+and these exact test commands:
+
+```text
+python -m unittest discover
+python -m unittest discover -v
+python -m unittest discover -s tests -v
+```
+
+The fleet's Bash callable executes the selected command as an argument list
+using the current Python interpreter, without a shell, with the shared filtered
+environment and a maximum 120-second timeout. Arbitrary commands, chaining,
+unknown tools/skills, absolute edit paths, traversal escapes and edits to skills,
+sessions or Git state are not automatically approved. Core filesystem tools
+also resolve and reject paths outside their project root.
+
+**This strategy is not an OS sandbox.** Generated tests are executable Python
+with the host account's permissions, including possible filesystem/network
+access outside the project. The guarantee above covers filesystem tool paths,
+not arbitrary generated programs; resolve/open races remain. Use OS isolation
+for untrusted generated code. Do not assume an approved test command is safe
+merely because its argument list is restricted.
+
+Model final text is recorded separately from artifact checks. Each phase must
+load the required skill. Missing or insufficient files trigger a bounded build
+repair before review; reviews resume the original parent session. Failed reviews
+receive another repair/review attempt. Blocked projects remain explicitly in
+the report, and every project is independently checked after the final review.
+Evidence is saved after phases and returned in original input order. Existing
+project directories or run evidence cause refusal rather than overwrite.
+
+The independent verifier checks HTML prerequisites and runs Taskman's generated
+tests plus a separate add/list/done/stats/rm lifecycle using a temporary store.
+Taskman uses global `--store PATH` and a JSON tasks list with stable `id`, `title`
+and boolean `done` fields. At least ten tests must actually execute successfully.
+HTML counting excludes scripts/styles and obvious inline hidden content, but
+cannot infer computed CSS visibility or establish interaction behavior. Static
+hooks do not prove gameplay, responsive design or accessibility. Browser checks
+and manual assessment of meaningful test coverage remain required; the runner
+keeps acceptance incomplete while those checks are outstanding. Model-written
+verification reports cannot clear these independent manual gates.
