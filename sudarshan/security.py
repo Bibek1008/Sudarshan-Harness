@@ -47,9 +47,10 @@ class Policy:
         """Allow a call with ``None`` or return the reason it must be blocked.
 
         Permanent bash denials deliberately precede the mode decision, so
-        neither automatic approval nor ``yolo`` can bypass them.
+        neither automatic approval nor ``yolo`` can bypass them.  Execution
+        adapters may prefix a backend name, but retain the same logical policy.
         """
-        name = call["name"]
+        name = _logical_tool_name(call["name"])
         command = str(call.get("args", {}).get("command", ""))
         if name == "bash" and any(re.search(pattern, command) for pattern in DENY_PATTERNS):
             return "dangerous bash command is never allowed"
@@ -61,3 +62,12 @@ class Policy:
         if self.approver(call, reason):
             return None
         return "approval was declined"
+
+
+def _logical_tool_name(name: str) -> str:
+    """Normalize registered backend tool names without changing Policy's API."""
+    actions = READ_TOOLS | {"bash", "write_file"}
+    for action in actions:
+        if name == action or name.endswith(f"_{action}"):
+            return action
+    return name
