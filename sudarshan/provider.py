@@ -45,14 +45,21 @@ def complete(
     url = f"{API_ROOT}/{model}:generateContent?key={quote(api_key(), safe='')}"
     response = _post(url, body)
     candidates = response.get('candidates') or []
-    candidate = candidates[0] if candidates else {}
-    parts = (candidate.get('content') or {}).get('parts') or []
+    candidate = candidates[0] if isinstance(candidates, list) and candidates else {}
+    candidate = candidate if isinstance(candidate, dict) else {}
+    content = candidate.get('content')
+    parts = content.get('parts') if isinstance(content, dict) else []
+    parts = parts if isinstance(parts, list) else []
     text: list[str] = []
     calls: list[dict[str, Any]] = []
     for part in parts:
-        if "text" in part and not part.get("thought"):
+        if not isinstance(part, dict):
+            continue
+        if isinstance(part.get("text"), str) and not part.get("thought"):
             text.append(part["text"])
-        if "functionCall" in part:
+        if (isinstance(part.get("functionCall"), dict)
+                and isinstance(part["functionCall"].get("name"), str)
+                and part["functionCall"]["name"].strip()):
             call = part["functionCall"]
             calls.append({"name": call["name"], "args": call.get("args", {}),
                           "signature": part.get("thoughtSignature")})
@@ -101,14 +108,15 @@ def _post(url: str, body: dict[str, Any], retries: int = 5) -> dict[str, Any]:
             with urlopen(request, timeout=600) as response:
                 return json.loads(response.read().decode("utf-8"))
         except HTTPError as error:
-            detail = error.read().decode("utf-8", errors="replace")[:400]
+            # Error bodies can echo credentials or request URLs. Never surface them.
+            error.close()
             if error.code not in {429, 500, 502, 503}:
-                raise RuntimeError(f"HTTP {error.code}: {detail}") from error
-            failure: Exception = RuntimeError(f"HTTP {error.code}: {detail}")
+                raise RuntimeError(f"Gemini HTTP {error.code}") from None
+            failure = f"HTTP {error.code}"
         except (URLError, TimeoutError) as error:
-            failure = error
+            failure = "network or timeout error"
         if attempt == retries - 1:
-            raise RuntimeError(f"Request failed after {retries} attempts: {failure}") from failure
+            raise RuntimeError(f"Gemini request failed after {retries} attempts: {failure}") from None
         time.sleep(2**attempt * 2)
 
     raise AssertionError("retry loop must either return or raise")

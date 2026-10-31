@@ -45,6 +45,12 @@ class SandboxedExecutionBackend(ExecutionBackend):
             raise ExecutionError(f"sandbox workspace does not exist: {self.root}")
         if not container_workdir.startswith("/") or "\x00" in container_workdir:
             raise ValueError("container workdir must be an absolute, non-NUL path")
+        if not image or image.startswith('-') or any(c.isspace() for c in image):
+            raise ValueError("container image must be a non-option image name")
+        if not user or user.split(':', 1)[0] in {'0', 'root'}:
+            raise ValueError("sandbox requires an explicit non-root user")
+        if ',' in str(self.root) or ',' in container_workdir:
+            raise ValueError("workspace mount paths cannot contain commas")
         self.image = image
         self.container_workdir = container_workdir.rstrip("/") or "/"
         self.memory = memory
