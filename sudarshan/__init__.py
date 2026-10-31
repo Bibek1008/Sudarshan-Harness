@@ -1,6 +1,12 @@
-"""Day 1: package foundation.
+"""Day 4: the small public surface for Sudarshan's composed agent harness.
 
-This intentionally empty module reserves the public package entry point.  The
-package API is assembled on Day 4; keeping initialization inert makes early
-modules independently teachable and import-safe.
+Only stable orchestration and tool primitives are exported here.  Provider,
+session, and implementation details remain importable from their focused
+modules, keeping the package entry point concise and dependency-light.
 """
+
+from .harness import Harness
+from .security import Policy
+from .tools import Tool, tool
+
+__all__ = ["Harness", "Policy", "Tool", "tool"]
