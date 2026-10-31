@@ -1,5 +1,55 @@
 # SUDARSHAN hardening report — current source
 
+## Current verification improvements — 31 October 2026
+
+Static PageFacts now excludes fractional zero opacity, filter opacity zero and
+common one-pixel overflow-hidden patterns, in addition to hidden classes,
+ancestors, sections, SVGs and script/style content. External stylesheet links
+are reported; without browser observations their visibility is unresolved and
+the automated gate fails. Static counts never claim computed visibility.
+
+A standard-library ChromiumProbe adapter now runs configured observations in
+headless Edge/Chrome: computed-style/geometry counts at exact iframe widths
+360/768/1280, coffee toggle/tab/FAQ state changes and dark-theme persistence,
+plus Viper-style keyboard handlers, movement, food/score growth, speed reduction,
+pause, restart and persisted high score. Reviewer-supplied selectors and read-only
+state mappings are required. Missing observations cannot pass browser gates.
+DOM keydown dispatch is synthetic, not trusted native keyboard input.
+
+Actual browser observations here are deterministic fixtures, not live products.
+The positive and nonresponsive-keyboard negative fixtures ran in Edge.
+No Artisan Coffee, Taskman or Viper live build ran; all remain incomplete.
+Real gameplay, game-over/collision correctness, native keyboard behavior,
+visual quality/accessibility and unobserved interactions still require manual
+evidence. The adapter does not clear manual acceptance requirements.
+
+### Latest actual execution
+
+- Python 3.12.10 (64-bit), Windows 11 build 26200; Edge 156.0.4314.50.
+- Complete suite: **99 discovered, 98 passed, 0 failures, 1 skipped**.
+- Skip: existing symlink test, Windows privilege error 1314.
+- Run: python -m unittest discover -v, outside the command sandbox so Edge
+  could execute. Edge's own browser sandbox was not disabled.
+- Initial restricted-command execution failed with five browser errors; it
+  was not counted as a successful run or silently converted into skips.
+  Chrome also failed crash-handler startup; the installed Edge runtime worked.
+- Compilation, CLI help, git diff --check and session ignore checks passed.
+- Verbose results: final-verification-tests.txt (delivered output).
+- Historical previous correction: 95 discovered, 94 passed, 0 failures, 1 skip.
+  Historical fleet integration: 90 discovered, 89 passed, 0 failures, 1 skip.
+  The retained earlier report below is historical rather than current evidence.
+
+### Live-build preparation
+
+See LIVE_BUILD_READINESS.md for credential/model preflight, fresh workspaces,
+scoped safe approvals, browser configuration and manual attestation workflow.
+SUDARSHAN_API_KEY remains primary; legacy fallbacks remain intentional.
+No secrets were printed, no live provider request was made and no product
+success is claimed. OS isolation for generated tests remains necessary when
+their code is untrusted. Browser fixtures do not certify a future product.
+
+## Historical report snapshot — retained for provenance
+
 ## Status
 
 Implemented: explicit tool permissions, conservative rm and find denials,
@@ -53,7 +103,7 @@ documents the risks of headless --mode yolo.
 
 - User-supplied verification result (environment not reproduced here): **73 passed, 0 failures,
   0 skipped**. This is supplied evidence, not an execution reproduced in this checkout.
-- Latest local execution after fleet integration: **90 discovered, 89 passed,
+- Historical local execution after fleet integration: **90 discovered, 89 passed,
   0 failures, 1 skipped** (Python 3.12 on Windows).
 - The skipped symlink escape test raises Windows error 1314 because symlink creation
   privileges are unavailable. It is not counted as passed.

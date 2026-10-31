@@ -239,4 +239,7 @@ or `run_products`. It receives `(index_path, viewport_width)` and must return
 integer `words`, `sections` and `svgs` measured with actual computed visibility.
 The verifier requests 360/768/1280 and uses the minimum counts. Adapter provenance
 is the caller's responsibility; interaction checks still require evidence.
-No browser engine is bundled, and no actual browser was run in these tests.
+No browser engine is bundled. The optional standard-library ChromiumProbe now
+executes deterministic fixture checks in installed headless Edge/Chrome. See
+LIVE_BUILD_READINESS.md for configuration, observed coverage and limitations.
+These fixture observations are not live-product acceptance.
