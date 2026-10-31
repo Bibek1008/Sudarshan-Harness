@@ -6,12 +6,13 @@ and every other effect requires the mode's stated authority.
 """
 
 import re
+import shlex
 from typing import Any, Callable
 
 
 READ_TOOLS = {"read_file", "list_files", "grep"}
 DENY_PATTERNS = (
-    r"\brm\s+(?:-[^\s]*[rf][^\s]*\s+)+(?:/|~(?:/)?|\$HOME(?:/)?)(?:\s|$)",
+    r"\brm\s+(?:--?[\w-]+\s+)+(?:/\*?|~/?|\$(?:HOME|\{HOME\})/?)(?=\s|[;&|]|$)",
     r"\bsudo\b",
     r"\bmkfs(?:\.\w+)?\b|\bdd\s+[^\n]*\bif=",
     r"\bcurl\b[^|]*\|\s*(?:sh|bash)\b",
@@ -51,9 +52,18 @@ class Policy:
         adapters may prefix a backend name, but retain the same logical policy.
         """
         name = _logical_tool_name(call["name"])
-        command = str(call.get("args", {}).get("command", ""))
-        if name == "bash" and any(re.search(pattern, command) for pattern in DENY_PATTERNS):
-            return "dangerous bash command is never allowed"
+        if name == "bash":
+            command = call.get("args", {}).get("command")
+            if not isinstance(command, str) or not command.strip() or '\x00' in command:
+                return "bash command cannot be evaluated safely"
+            try:
+                shlex.split(command)
+            except ValueError:
+                return "bash command cannot be evaluated safely"
+            # Normalize shell quoting for conservative inspection, never for execution.
+            inspected = command.replace("'", "").replace('"', '').replace('\\\n', '')
+            if any(re.search(pattern, inspected) for pattern in DENY_PATTERNS):
+                return "dangerous bash command is never allowed"
         if name in READ_TOOLS or self.mode == "yolo":
             return None
         if self.mode == "read-only":
