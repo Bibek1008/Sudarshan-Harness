@@ -1,7 +1,10 @@
 """Day 4 tests: JSONL session creation, torn tails, and interruption repair."""
 
 import os
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -52,6 +55,27 @@ class SessionTests(unittest.TestCase):
             "role": "tool", "name": "write_file",
             "text": "Interrupted before this ran (process restarted).",
         })
+
+    def test_hard_terminated_worker_leaves_recoverable_call(self) -> None:
+        """A killed worker leaves a durable partial call that recovery can pair."""
+        path = new_session(self.root, "hard-stop")
+        append(path, {"role": "user", "text": "create parts"})
+        message = {"role": "assistant", "text": "", "tool_calls": [
+            {"name": "write_file", "args": {"path": "part1.txt"}},
+        ]}
+        code = f"from sudarshan.session import append; append({str(path)!r}, {message!r}); import time; time.sleep(60)"
+        worker = subprocess.Popen([sys.executable, "-c", code], cwd=Path(__file__).resolve().parent.parent)
+        try:
+            deadline = time.monotonic() + 3
+            while '"assistant"' not in path.read_text(encoding="utf-8") and time.monotonic() < deadline:
+                time.sleep(0.02)
+            worker.kill()
+            worker.wait(timeout=3)
+        finally:
+            if worker.poll() is None:
+                worker.kill()
+        messages = load(path)
+        self.assertEqual(messages[-1]["text"], "Interrupted before this ran (process restarted).")
 
 
 if __name__ == "__main__":
