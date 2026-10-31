@@ -40,12 +40,16 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--resume", nargs="?", const="")
     parser.add_argument("--max-turns", type=int, default=120)
     args = parser.parse_args(argv)
-    mode = args.mode or ("yolo" if args.prompt else "safe")
+    mode = args.mode or ("yolo" if args.prompt is not None else "safe")
     harness = Harness(args.workdir, model=args.model, policy=Policy(mode, _approver if mode == "safe" else None), on_event=_event, max_turns=args.max_turns)
     if args.resume is not None and not harness.resume(args.resume or None):
         print("No session available to resume.")
-    if args.prompt:
-        print(harness.run(args.prompt))
+    if args.prompt is not None:
+        try:
+            harness.run(args.prompt)
+        except KeyboardInterrupt:
+            print("\nInterrupted; the session log is safe and --resume continues it.")
+            raise SystemExit(130)
         return
     print(f"Sudarshan · model={harness.model} · mode={mode} · jail={harness.workdir}")
     while True:
@@ -59,6 +63,6 @@ def main(argv: Sequence[str] | None = None) -> None:
             continue
         if task:
             try:
-                print(harness.run(task))
+                harness.run(task)
             except KeyboardInterrupt:
                 print("\nInterrupted; the session log is safe and --resume continues it.")
