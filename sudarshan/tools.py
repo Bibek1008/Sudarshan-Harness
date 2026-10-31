@@ -13,6 +13,8 @@ import subprocess
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from .environment import safe_shell_environment
+
 
 IGNORED_DIRECTORIES = {".git", "node_modules", "__pycache__", ".venv"}
 
@@ -123,6 +125,7 @@ def core_tools(workdir: str) -> list[Tool]:
         try:
             completed = subprocess.run(
                 command, shell=True, cwd=root, capture_output=True, text=True,
+                env=safe_shell_environment(),
                 timeout=float(timeout),
             )
         except subprocess.TimeoutExpired:

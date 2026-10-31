@@ -12,6 +12,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from ..environment import safe_shell_environment
+
 from .base import (
     ExecutionBackend,
     ExecutionError,
@@ -154,5 +156,4 @@ def _truncate(text: str) -> str:
 
 def _safe_environment() -> dict[str, str]:
     """Return only OS runtime variables needed by ordinary local commands."""
-    allowed = {"COMSPEC", "PATH", "PATHEXT", "SYSTEMROOT", "TEMP", "TMP", "WINDIR"}
-    return {key: value for key, value in os.environ.items() if key.upper() in allowed}
+    return safe_shell_environment()
