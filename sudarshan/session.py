@@ -6,6 +6,7 @@ explicit interruption results so the next model turn sees a valid transcript.
 """
 
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -29,18 +30,42 @@ def append(path: str | Path, message: dict[str, Any]) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(message, ensure_ascii=False) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
 
 
 def load(path: str | Path) -> list[dict[str, Any]]:
-    """Load complete JSONL records, ignoring a torn tail and repairing call pairs."""
+    """Truncate torn bytes and durably append missing tool results, idempotently.
+
+    Each session has one writer; callers must not resume a live writer's log.
+    """
     messages: list[dict[str, Any]] = []
-    with Path(path).open(encoding="utf-8") as handle:
-        for line in handle:
+    with Path(path).open('r+b') as handle:
+        valid_end = 0
+        last_line = b''
+        while line := handle.readline():
             try:
-                messages.append(json.loads(line))
-            except json.JSONDecodeError:
+                message = json.loads(line.decode('utf-8'))
+                if not isinstance(message, dict) or 'role' not in message:
+                    raise ValueError('not a message')
+                messages.append(message)
+            except (ValueError, UnicodeDecodeError):
+                # A partial UTF-8 codepoint is also a torn tail; retain valid bytes.
+                handle.seek(valid_end)
+                handle.truncate()
                 break
-    return _repair(messages)
+            valid_end = handle.tell()
+            last_line = line
+        if last_line and not last_line.endswith(b'\n'):
+            handle.seek(valid_end)
+            handle.write(b'\n')
+        handle.flush()
+        os.fsync(handle.fileno())
+    original_count = len(messages)
+    _repair(messages)
+    for message in messages[original_count:]:
+        append(path, message)
+    return messages
 
 
 def latest(workdir: str | Path) -> Path | None:
