@@ -28,7 +28,8 @@ class SessionTests(unittest.TestCase):
         append(first, {"role": "user", "text": "first"})
         second = first.with_name("9999999999-newest.jsonl")
         append(second, {"role": "user", "text": "second"})
-        os.utime(second, None)
+        os.utime(first, (1, 1))
+        os.utime(second, (2, 2))
         self.assertRegex(first.name, r"^\d+-my-session-with-spaces\.jsonl$")
         self.assertEqual(latest(self.root), second)
 
