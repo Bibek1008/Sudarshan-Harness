@@ -57,12 +57,12 @@ class Policy:
             if not isinstance(command, str) or not command.strip() or '\x00' in command:
                 return "bash command cannot be evaluated safely"
             try:
-                shlex.split(command)
+                tokens = list(shlex.shlex(command, posix=True, punctuation_chars=';&|()'))
             except ValueError:
                 return "bash command cannot be evaluated safely"
             # Normalize shell quoting for conservative inspection, never for execution.
             inspected = command.replace("'", "").replace('"', '').replace('\\\n', '')
-            if any(re.search(pattern, inspected) for pattern in DENY_PATTERNS):
+            if _dangerous_rm(tokens) or any(re.search(pattern, inspected) for pattern in DENY_PATTERNS):
                 return "dangerous bash command is never allowed"
         if name in READ_TOOLS or self.mode == "yolo":
             return None
@@ -79,3 +79,23 @@ def _logical_tool_name(name: str) -> str:
     if name.endswith('_bash'):
         return 'bash'
     return name
+
+
+def _dangerous_rm(tokens: list[str]) -> bool:
+    """Deny broad deletion targets regardless of option position or spelling.
+
+    This deliberately rejects root/home targets even without recursive flags.
+    Token inspection is not a proof of arbitrary shell program safety.
+    """
+    active = False
+    for token in tokens:
+        if token and all(char in ';&|()' for char in token):
+            active = False
+        elif token.rsplit('/', 1)[-1] == 'rm':
+            active = True
+        elif active and not token.startswith('-'):
+            if token.startswith(('~', '$HOME', '${HOME}')):
+                return True
+            if token.startswith('/') and all(part in ('', '.', '..', '*') for part in token.split('/')):
+                return True
+    return False
