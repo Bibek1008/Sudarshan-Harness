@@ -49,7 +49,7 @@ class AuditRepairs(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=parent) as tmp:
             path = session.new_session(tmp)
             session.append(path, {'role': 'assistant', 'text': '', 'tool_calls': [
-                {'name': 'one'}, {'name': 'two'}]})
+                {'name': 'one', 'args': {}}, {'name': 'two', 'args': {}}]})
             with path.open('ab') as handle:
                 handle.write(b'{"role": "to')
             repaired = session.load(path)

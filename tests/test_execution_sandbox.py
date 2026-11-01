@@ -28,12 +28,12 @@ class SandboxedExecutionBackendTests(unittest.TestCase):
 
     def test_unavailable_docker_never_falls_back_to_local(self) -> None:
         """Missing Docker is a clear availability error, not host command execution."""
-        with patch("sudarshan.execution.sandbox.shutil.which", return_value=None):
+        with patch("sudarshan.execution.sandbox.trusted_executable", return_value=None):
             with self.assertRaises(BackendUnavailable):
                 self.backend.execute("echo should-not-run")
 
-    @patch("sudarshan.execution.sandbox.subprocess.run")
-    @patch("sudarshan.execution.sandbox.shutil.which", return_value="docker")
+    @patch("sudarshan.execution.sandbox.run_owned")
+    @patch("sudarshan.execution.sandbox.trusted_executable", return_value="docker")
     def test_hardened_docker_command_and_resource_limits(self, _which, run) -> None:
         """Network, privilege, root filesystem, and resource settings are explicit."""
         run.return_value = subprocess.CompletedProcess([], 0, "hello\n", "")
@@ -54,18 +54,19 @@ class SandboxedExecutionBackendTests(unittest.TestCase):
         self.assertNotIn("--privileged", command)
         self.assertNotIn("docker.sock", rendered)
 
-    @patch("sudarshan.execution.sandbox.subprocess.run")
-    @patch("sudarshan.execution.sandbox.shutil.which", return_value="docker")
+    @patch("sudarshan.execution.sandbox.run_owned")
+    @patch("sudarshan.execution.sandbox.trusted_executable", return_value="docker")
     def test_timeout_and_container_failure_remain_distinct(self, _which, run) -> None:
         """Timeouts raise while ordinary nonzero container exits return details."""
-        run.side_effect = subprocess.TimeoutExpired(["docker"], 0.01)
+        run.side_effect = [ExecutionTimeout("timeout"), subprocess.CompletedProcess([], 0, "", "")]
         with self.assertRaises(ExecutionTimeout):
             self.backend.execute("sleep 5", timeout=0.01)
         run.side_effect = None
         run.return_value = subprocess.CompletedProcess([], 3, "", "bad command")
         result = self.backend.execute("false")
         self.assertEqual(result.exit_code, 3)
-        self.assertEqual(result.error, "container exited with 3")
+        self.assertIn("container exited with 3", result.error)
+        self.assertIn("cleanup unconfirmed", result.error)
         self.assertIn("bad command", result.stderr)
 
     def test_file_path_traversal_is_rejected_before_docker(self) -> None:

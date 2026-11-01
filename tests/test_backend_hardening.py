@@ -24,7 +24,7 @@ class BackendHardeningTests(unittest.TestCase):
 
     def test_docker_timeout_removes_exact_container(self):
         """A timed-out Docker client triggers bounded removal of its named container."""
-        with patch('sudarshan.execution.sandbox.shutil.which', return_value='docker'), patch('sudarshan.execution.sandbox.subprocess.run', side_effect=[subprocess.TimeoutExpired('docker', 1), SimpleNamespace(returncode=0)]) as run:
+        with patch('sudarshan.execution.sandbox.trusted_executable', return_value='docker'), patch('sudarshan.execution.sandbox.run_owned', side_effect=[ExecutionTimeout('timeout'), SimpleNamespace(returncode=0)]) as run:
             with self.assertRaisesRegex(ExecutionTimeout, 'container removed'):
                 SandboxedExecutionBackend('.').execute('sleep 99', timeout=1)
         argv = run.call_args_list[0].args[0]

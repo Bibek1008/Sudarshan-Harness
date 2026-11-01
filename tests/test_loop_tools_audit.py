@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from sudarshan.execution.base import ExecutionTimeout
 from sudarshan import loop
 from sudarshan.tools import core_tools
 
@@ -26,7 +27,7 @@ class LoopToolsTests(unittest.TestCase):
                                    lambda c: 'no' if c['name'] == 'blocked' else None)
         self.assertEqual(answer, 'done')
         self.assertEqual([m['text'] for m in messages if m['role'] == 'tool'],
-                         ['ERROR: unknown tool missing', 'BLOCKED: no', 'ERROR: ValueError: bad argument'])
+                         ['ERROR: unknown tool missing', 'BLOCKED: no', 'ERROR: ValueError: tool execution failed'])
         self.assertEqual(events.count('tool_end'), 3)
 
     def test_before_turn_preserves_list_identity(self):
@@ -52,9 +53,9 @@ class LoopToolsTests(unittest.TestCase):
             self.assertEqual(tools['list_files']('*.txt'), 'nested/a.txt')
             with self.assertRaises(PermissionError):
                 tools['read_file']('../../outside')
-            with patch('sudarshan.tools.subprocess.run', side_effect=subprocess.TimeoutExpired('cmd', 1)):
+            with patch('sudarshan.tools.run_owned', side_effect=ExecutionTimeout('timed out after 1s')):
                 self.assertEqual(tools['bash']('test', '1'), 'ERROR: timed out after 1s')
-            with patch('sudarshan.tools.subprocess.run', return_value=SimpleNamespace(stdout='a'*13000, stderr='', returncode=0)):
+            with patch('sudarshan.tools.run_owned', return_value=SimpleNamespace(stdout='a'*13000, stderr='', returncode=0)):
                 output = tools['bash']('test')
             self.assertIn('truncated', output)
             self.assertTrue(output.startswith('a'*6000) and output.endswith('a'*6000))

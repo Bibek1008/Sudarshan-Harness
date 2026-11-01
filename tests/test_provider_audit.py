@@ -11,6 +11,13 @@ from sudarshan import provider
 class ProviderTests(unittest.TestCase):
     """Verify vendor boundary behavior without credentials or network access."""
 
+    def setUp(self):
+        key = patch.object(provider, "api_key", return_value="synthetic-test-key")
+        # Only transport tests need a synthetic key; key selection has its own test.
+        if self._testMethodName != "test_keys":
+            key.start()
+            self.addCleanup(key.stop)
+
     def test_keys(self):
         """Harness-specific key wins; fallback and missing-key error remain stable."""
         with patch.dict('os.environ', {'ODYSSEUS_API_KEY': 'one', 'GEMINI_API_KEY': 'two'}, clear=True):
@@ -49,7 +56,7 @@ class ProviderTests(unittest.TestCase):
                 self.assertEqual(request.call_args.kwargs['timeout'], 600)
 
     def test_permanent_http_error(self):
-        """Permanent failures include status and bounded body, without sleeping."""
+        """Permanent failures expose status without response bodies or retries."""
         error = HTTPError('https://example.test', 400, 'bad', {}, io.BytesIO(b'x' * 500))
         with patch.object(provider, 'urlopen', side_effect=error), patch.object(provider.time, 'sleep') as sleep:
             with self.assertRaisesRegex(RuntimeError, 'HTTP 400') as raised:

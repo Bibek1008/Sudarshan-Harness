@@ -264,3 +264,18 @@ never weakens browser security to make them pass.
 ## Quality and execution security repairs
 
 See [QA review](QA_SECURITY_REPORT.md), [execution security review](PHASE2_EXECUTION_SECURITY.md), and [Taskman commands](taskman/README.md). Run `python -m unittest discover -v` for all tests.
+
+
+## Cross-platform CI
+
+GitHub Actions validates Windows and Ubuntu on Python 3.10 and 3.12. Run
+`python scripts/ci_validate.py` locally for the same compile, unittest discovery
+and help commands, with logs and skip reasons in `ci-results/`. The standard-library
+suite requires no pip dependencies. CI artifacts include failure diagnostics.
+
+Live Docker tests are opt-in: set `SUDARSHAN_DOCKER_INTEGRATION=1` and run
+`python scripts/ci_validate.py --docker-only`. This pulls the official
+`python:3.12-slim` image and uses only disposable workspaces/containers. Missing
+Docker/daemon support is reported as not executed. A separate Ubuntu CI job runs
+these checks. No personal SSH credentials are used; live SSH integration is pending.
+See [Phase 3 verification](PHASE3_CI_REPORT.md) for actual local results and limits.

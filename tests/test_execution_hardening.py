@@ -57,16 +57,19 @@ else:
                         kernel.CloseHandle(handle)
                 else:
                     self.assertEqual(ctypes.get_last_error(), 87)  # PID no longer exists
-            elif Path(f"/proc/{pid}/stat").exists():
-                # A dead orphan can be a zombie until the OS reaper runs.
-                self.assertEqual(Path(f"/proc/{pid}/stat").read_text().split()[2], "Z")
             else:
-                try:
-                    os.kill(pid, 0)
-                except ProcessLookupError:
-                    pass
-                else:
-                    self.fail(f"test-owned process {pid} survived")
+                deadline = time.monotonic() + 2
+                while True:
+                    status = Path(f"/proc/{pid}/stat")
+                    try:
+                        if status.exists() and status.read_text().split()[2] == "Z":
+                            break  # dead orphan pending the OS reaper
+                        os.kill(pid, 0)
+                    except (ProcessLookupError, FileNotFoundError):
+                        break
+                    if time.monotonic() >= deadline:
+                        self.fail(f"test-owned process {pid} survived")
+                    time.sleep(.01)
 
     def test_timeout_kills_nested_process_tree(self):
         with self.assertRaises(ExecutionTimeout):
@@ -269,7 +272,8 @@ class TestHandleFilesystem(WorkspaceCase):
         result = subprocess.run(["cmd.exe", "/d", "/c", "mklink", "/J", str(junction), str(target)], capture_output=True, text=True)
         if result.returncode:
             self.skipTest("Windows junction creation unavailable: " + (result.stderr or result.stdout).strip())
-        self.assertTrue(junction.is_junction())
+        if hasattr(junction, "is_junction"):
+            self.assertTrue(junction.is_junction())
         with self.assertRaises(ExecutionPermissionError):
             WorkspaceFiles(self.root).write_text("junction/blocked.txt", "blocked")
         self.assertEqual(list(target.iterdir()), [])

@@ -1,0 +1,54 @@
+name: Cross-platform validation
+on:
+  push:
+    branches: [main, phase-3-cross-platform-ci]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        python: ['3.10', '3.12']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      # Standard library only: no pip dependencies or dependency cache needed.
+      - name: Validate and capture diagnostics
+        run: python scripts/ci_validate.py
+      - name: Upload validation logs and skip reasons
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-${{ matrix.os }}-py${{ matrix.python }}
+          path: ci-results/
+          if-no-files-found: error
+  docker-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Live disposable Docker tests
+        env:
+          SUDARSHAN_DOCKER_INTEGRATION: '1'
+        run: python scripts/ci_validate.py --docker-only
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: docker-integration
+          path: ci-results/
+          if-no-files-found: error

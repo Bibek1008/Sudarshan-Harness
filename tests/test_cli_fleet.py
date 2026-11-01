@@ -74,6 +74,6 @@ class FrontDoorTests(unittest.TestCase):
         jobs = [{'name': name, 'workdir': name, 'task': name} for name in 'abc']
         results = run_fleet(jobs, factory, max_workers=3)
         self.assertEqual([item['name'] for item in results], list('abc'))
-        self.assertEqual(results[1], {'name': 'b', 'ok': False, 'report': 'ValueError: expected failure'})
+        self.assertEqual(results[1], {'name': 'b', 'ok': False, 'report': 'ValueError: fleet job failed'})
         self.assertEqual(sorted(seen), list('abc'))
         self.assertTrue(results[0]['ok'] and results[2]['ok'])
