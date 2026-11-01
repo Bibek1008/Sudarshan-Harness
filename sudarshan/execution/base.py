@@ -148,7 +148,7 @@ def backend_tools(
                 "required": [key for key in properties if key not in {"timeout", "pattern"}],
             },
         }
-        return Tool(name=name, spec={"schema": schema}, run=run)
+        return Tool(name=name, spec={"schema": schema}, run=run, execution_backend=backend.name)
 
     def bash(command: str, timeout: str = "120") -> str:
         """Run a backend command after its canonical policy check."""

@@ -4,6 +4,10 @@ The CLI keeps approvals explicit and forwards all agent behavior to Harness.
 """
 
 import argparse
+import json
+import sys
+from .telemetry import Store
+from . import telemetry as diagnostics
 from typing import Any, Sequence
 
 from .harness import Harness
@@ -43,9 +47,54 @@ def main(argv: Sequence[str] | None = None) -> None:
                         help="approval policy (default: safe); yolo skips approval and is not a sandbox")
     parser.add_argument("--resume", nargs="?", const="")
     parser.add_argument("--max-turns", type=int, default=120)
+    parser.add_argument("--no-telemetry", action="store_true", help="Disable metadata telemetry for this invocation")
+    parser.add_argument("diagnostic", nargs="?", choices=("stats", "trace", "telemetry"))
+    parser.add_argument("--session", help="Opaque telemetry session UUID")
+    parser.add_argument("--last", type=int, help="Most recent N telemetry sessions")
+    parser.add_argument("--json", action="store_true", dest="json_output")
+    toggles = parser.add_mutually_exclusive_group()
+    toggles.add_argument("--disable", action="store_true")
+    toggles.add_argument("--enable", action="store_true")
     args = parser.parse_args(argv)
+    if args.last is not None and args.last < 1: parser.error("--last must be positive")
+    if args.diagnostic:
+        if args.prompt is not None or args.resume is not None:
+            parser.error("diagnostics cannot be combined with an agent prompt or resume")
+        try:
+            store = Store(args.workdir)
+            if args.diagnostic == "telemetry":
+                if not (args.disable or args.enable): parser.error("telemetry requires --enable or --disable")
+                store.configure(args.enable)
+                print("Telemetry enabled." if args.enable else "Telemetry disabled.")
+                return
+            if args.disable or args.enable: parser.error("enable/disable requires telemetry")
+            if args.diagnostic == "trace":
+                if not args.session: parser.error("trace requires --session")
+                with store.locked():
+                    events, corrupt = store.read(args.session)
+                result = {"events": events, "corrupt_records": corrupt}
+            else:
+                result = store.stats(args.session, args.last)
+            if args.json_output: print(json.dumps(result, indent=2))
+            elif args.diagnostic == "trace":
+                for event in result["events"]:
+                    print(f"{event['timestamp']} turn={event['turn']} {event['event_type']} {event['status']}")
+                if not result["events"]: print("No telemetry found.")
+                if corrupt: print(f"Skipped {corrupt} invalid telemetry records.")
+            else:
+                if not result["sessions"]: print("No telemetry found.")
+                for item in result["sessions"]:
+                    print(f"{item['session_id']} model={item['model']} status={item['status']} turns={item['turns']} requests={item['model_requests']} retries={item['retries']} duration_ms={item['duration_ms']}")
+                    print("  actual measured tokens:", json.dumps(item['tokens']), "estimated cost:", json.dumps(item['estimated_cost']))
+                print("Aggregate:", json.dumps(result["aggregate"]))
+            return
+        except (ValueError, OSError):
+            print("Error: telemetry could not be read or configured; check UUID, permissions and configuration.", file=sys.stderr)
+            raise SystemExit(1) from None
+    if args.disable or args.enable or args.session or args.last is not None or args.json_output:
+        parser.error("diagnostic options require stats, trace or telemetry")
     mode = args.mode
-    harness = Harness(args.workdir, model=args.model, policy=Policy(mode, _approver if mode == "safe" else None), on_event=_event, max_turns=args.max_turns)
+    harness = Harness(args.workdir, **({"telemetry": False} if args.no_telemetry else {}), model=args.model, policy=Policy(mode, _approver if mode == "safe" else None), on_event=_event, max_turns=args.max_turns)
     if args.resume is not None and not harness.resume(args.resume or None):
         print("No session available to resume.")
     if args.prompt is not None:

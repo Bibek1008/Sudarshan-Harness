@@ -6,10 +6,11 @@ shared workspace but no resumable session state.
 """
 
 import os
+import time
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from . import context, loop, memory, provider, session, skills
+from . import context, loop, memory, provider, session, skills, telemetry as diagnostics
 from .security import Policy
 from .paths import workspace_path
 from .subagent import subagent_tool
@@ -33,6 +34,7 @@ class Harness:
         enable_subagents: bool = True,
         persist: bool = True,
         _depth: int = 0,
+        telemetry: bool | None = None,
     ) -> None:
         """Compose a harness while leaving provider and loop protocols unchanged."""
         self.workdir = Path(workdir).resolve()
@@ -44,6 +46,9 @@ class Harness:
         self.budget_tokens = budget_tokens
         self.max_turns = max_turns
         self.persist = persist
+        self.telemetry = persist if telemetry is None else telemetry
+        self.last_telemetry_session = None
+        self.telemetry_storage_failed = False
         self._depth = _depth
         self.enable_subagents = enable_subagents
         self._extra_tools = list(extra_tools.values()) if isinstance(extra_tools, dict) else list(extra_tools or [])
@@ -72,6 +77,34 @@ class Harness:
         return True
 
     def run(self, task: str) -> str:
+        """Execute with a separate metadata-only telemetry scope."""
+        recorder = None
+        if self.telemetry:
+            try:
+                store = diagnostics.Store(self.workdir)
+                if store.enabled(): recorder = diagnostics.Recorder(store, self.model)
+            except (OSError, ValueError):
+                self.telemetry_storage_failed = True
+        token = diagnostics.ACTIVE.set(recorder)
+        if recorder:
+            self.last_telemetry_session = recorder.session_id
+            recorder.emit("session_started", status="started")
+        try:
+            answer = self._run(task)
+            if recorder: recorder.emit("session_completed", duration_ms=(time.perf_counter()-recorder.started)*1000)
+            return answer
+        except BaseException as error:
+            if recorder:
+                interrupted = isinstance(error, (KeyboardInterrupt, SystemExit))
+                recorder.emit("session_interrupted" if interrupted else "session_completed", status="interrupted" if interrupted else "failed", error_category="interrupted" if interrupted else "session_error", duration_ms=(time.perf_counter()-recorder.started)*1000)
+            raise
+        finally:
+            if recorder:
+                recorder.finish()
+                self.telemetry_storage_failed = recorder.storage_failed
+            diagnostics.ACTIVE.reset(token)
+
+    def _run(self, task: str) -> str:
         """Record one task, run the loop, and persist each event-produced message."""
         if self.persist and self.session_path is None:
             self.session_path = session.new_session(self.workdir, task[:32])
@@ -136,5 +169,5 @@ class Harness:
             self.workdir, model=self.model, policy=self.policy, extra_tools=self._extra_tools,
             system_extra=self.system_extra, on_event=self.on_event,
             budget_tokens=self.budget_tokens, max_turns=self.max_turns,
-            enable_subagents=self.enable_subagents, persist=False, _depth=depth,
+            enable_subagents=self.enable_subagents, persist=False, _depth=depth, telemetry=self.telemetry,
         )

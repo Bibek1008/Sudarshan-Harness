@@ -7,7 +7,7 @@ The summary call preserves decisions and unfinished work rather than prose.
 
 from typing import Any
 
-from . import provider
+from . import provider, telemetry
 
 
 CHARS_PER_TOKEN = 4
@@ -33,12 +33,13 @@ def compact(model: str, messages: list[dict[str, Any]], budget_tokens: int) -> l
     while recent and recent[0]["role"] == "tool":
         old.append(recent.pop(0))
     transcript = "\n".join(_render(message) for message in old)
-    response = provider.complete(
+    response = telemetry.request(model, lambda: provider.complete(
         model,
         COMPACTION_SYSTEM,
         [{"role": "user", "text": transcript}],
         [],
-    )
+    ))
+    telemetry.emit("context_compacted")
     summary = {"role": "user", "text": f"[Conversation so far, compacted]\n{response['text']}"}
     return [summary] + recent
 

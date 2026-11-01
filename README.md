@@ -279,3 +279,15 @@ Live Docker tests are opt-in: set `SUDARSHAN_DOCKER_INTEGRATION=1` and run
 Docker/daemon support is reported as not executed. A separate Ubuntu CI job runs
 these checks. No personal SSH credentials are used; live SSH integration is pending.
 See [Phase 3 verification](PHASE3_CI_REPORT.md) for actual local results and limits.
+
+
+## Observability
+
+Durable Harness runs collect metadata-only events locally under ignored
+`.sudarshan/telemetry/`. Use `python -m sudarshan stats --json` or
+`python -m sudarshan trace --session SESSION_UUID` to inspect measurements.
+Disable collection with `python -m sudarshan telemetry --disable` or use
+`--no-telemetry` for one invocation. Actual provider token counts are distinct
+from optional cost estimates; no model prices are bundled or fetched.
+See [observability documentation](docs/OBSERVABILITY.md) for pricing, retention,
+privacy boundaries and limitations. Existing transcript persistence is separate.

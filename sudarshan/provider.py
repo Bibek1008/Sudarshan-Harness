@@ -6,6 +6,8 @@ and response parsing.  It uses only the Python standard library and preserves
 model thought signatures exactly, so later tool turns remain valid.
 """
 
+from . import telemetry
+
 import json
 import os
 import time
@@ -77,6 +79,7 @@ def complete(
     metadata = response.get("usageMetadata")
     metadata = metadata if isinstance(metadata, dict) else {}
     return {"text": "".join(text), "tool_calls": calls,
+            "usage_details": telemetry.usage_metadata(metadata),
             "usage": {"input": metadata.get("promptTokenCount", 0),
                       "output": metadata.get("candidatesTokenCount", 0)}}
 
@@ -131,6 +134,9 @@ def _post(url: str, body: dict[str, Any], retries: int = 5) -> dict[str, Any]:
             failure = "network or timeout error"
         if attempt == retries - 1:
             raise RuntimeError(f"Gemini request failed after {retries} attempts: {failure}") from None
+        recorder = telemetry.ACTIVE.get()
+        if recorder and recorder.request_id:
+            telemetry.emit("model_retry", request_id=recorder.request_id, status="started", error_category="model_error")
         time.sleep(2**attempt * 2)
 
     raise AssertionError("retry loop must either return or raise")

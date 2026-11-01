@@ -43,6 +43,7 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(body['contents'][1]['parts'][0]['functionResponse']['response']['result'], 'contents')
         self.assertEqual(body['tools'][0]['functionDeclarations'], [{'name': 'read'}])
         self.assertEqual(body['systemInstruction']['parts'][0]['text'], 'system')
+        self.assertEqual(result.pop("usage_details"), provider.telemetry.usage_metadata(response["usageMetadata"]))
         self.assertEqual(result, {'text': 'answer', 'tool_calls': [call], 'usage': {'input': 10, 'output': 20}})
 
     def test_retryable_errors(self):
