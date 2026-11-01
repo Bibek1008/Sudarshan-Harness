@@ -1,7 +1,7 @@
 name: Cross-platform validation
 on:
   push:
-    branches: [main, phase-3-cross-platform-ci]
+    branches: [main, phase-3-cross-platform-ci, phase-4-observability]
   pull_request:
   workflow_dispatch:
 permissions:

@@ -12,3 +12,5 @@ tests/tmp*/
 
 ci-results/
 phase3-local-validation.log
+
+*.log
