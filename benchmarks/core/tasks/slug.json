@@ -1,0 +1,20 @@
+{
+  "id": "slug",
+  "name": "Implement a slug function",
+  "category": "coding",
+  "version": "1.0.0",
+  "description": "Implement a slug function",
+  "instructions": "Implement slugify(text) in solution.py. Lowercase words and join whitespace-separated words with hyphens. Empty/whitespace input returns an empty string.",
+  "fixture": "slug",
+  "verifier": "core-v1",
+  "seconds": 90,
+  "turns": 12,
+  "deliverables": [
+    "solution.py"
+  ],
+  "criteria": [
+    "ordinary",
+    "whitespace",
+    "empty"
+  ]
+}

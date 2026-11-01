@@ -1,0 +1,20 @@
+{
+  "id": "orders",
+  "name": "Refactor without changing order totals",
+  "category": "refactoring",
+  "version": "1.0.0",
+  "description": "Refactor without changing order totals",
+  "instructions": "Refactor duplicated pricing branches in orders.py total(items, member=False). Each (price, quantity) contributes price*quantity; member discount is 10 percent. Keep behavior including empty input. Replace duplication with a shared subtotal computation.",
+  "fixture": "orders",
+  "verifier": "core-v1",
+  "seconds": 90,
+  "turns": 12,
+  "deliverables": [
+    "orders.py"
+  ],
+  "criteria": [
+    "normal",
+    "discount_empty",
+    "single_loop"
+  ]
+}

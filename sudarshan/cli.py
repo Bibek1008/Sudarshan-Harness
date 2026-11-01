@@ -39,7 +39,11 @@ def _approver(call: dict[str, Any], reason: str) -> bool:
 
 def main(argv: Sequence[str] | None = None) -> None:
     """Run a headless task or an interactive, resumable prompt loop."""
-    parser = argparse.ArgumentParser(description="Sudarshan, the small sharp coding agent.")
+    actual_argv = list(sys.argv[1:] if argv is None else argv)
+    if actual_argv and actual_argv[0] == "benchmark":
+        from .evaluation.cli import main as benchmark_main
+        return benchmark_main(actual_argv[1:])
+    parser = argparse.ArgumentParser(description="Sudarshan, the small sharp coding agent.", epilog="Benchmark commands: python -m sudarshan benchmark --help")
     parser.add_argument("-p", "--prompt")
     parser.add_argument("-d", "--workdir", default=".")
     parser.add_argument("-m", "--model")
@@ -55,7 +59,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     toggles = parser.add_mutually_exclusive_group()
     toggles.add_argument("--disable", action="store_true")
     toggles.add_argument("--enable", action="store_true")
-    args = parser.parse_args(argv)
+    args = parser.parse_args(actual_argv)
     if args.last is not None and args.last < 1: parser.error("--last must be positive")
     if args.diagnostic:
         if args.prompt is not None or args.resume is not None:

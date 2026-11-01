@@ -1,0 +1,20 @@
+{
+  "id": "port",
+  "name": "Validate network port values",
+  "category": "validation",
+  "version": "1.0.0",
+  "description": "Validate network port values",
+  "instructions": "Implement parse_port(value) in solution.py: accept integer or ASCII decimal string ports from 1 through 65535. Reject booleans, floats, whitespace, signs, non-ASCII digits, and out-of-range values with ValueError.",
+  "fixture": "port",
+  "verifier": "core-v1",
+  "seconds": 90,
+  "turns": 12,
+  "deliverables": [
+    "solution.py"
+  ],
+  "criteria": [
+    "valid",
+    "range",
+    "types"
+  ]
+}

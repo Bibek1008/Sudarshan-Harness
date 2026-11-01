@@ -1,0 +1,20 @@
+{
+  "id": "unique",
+  "name": "Fix stable uniqueness regression",
+  "category": "regression",
+  "version": "1.0.0",
+  "description": "Fix stable uniqueness regression",
+  "instructions": "Repair unique(values) in solution.py to preserve first-occurrence order and support unhashable values, without mutating input.",
+  "fixture": "unique",
+  "verifier": "core-v1",
+  "seconds": 90,
+  "turns": 12,
+  "deliverables": [
+    "solution.py"
+  ],
+  "criteria": [
+    "stable",
+    "unhashable",
+    "unchanged"
+  ]
+}

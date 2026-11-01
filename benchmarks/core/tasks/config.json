@@ -1,0 +1,20 @@
+{
+  "id": "config",
+  "name": "Extend an existing configuration module",
+  "category": "modification",
+  "version": "1.0.0",
+  "description": "Extend an existing configuration module",
+  "instructions": "Extend settings.py load_config(text) with optional retries default 3. Require retries to be an integer from 0 to 5 (not bool). Preserve the existing required nonempty name check and return a dict containing name and retries.",
+  "fixture": "config",
+  "verifier": "core-v1",
+  "seconds": 90,
+  "turns": 12,
+  "deliverables": [
+    "settings.py"
+  ],
+  "criteria": [
+    "default",
+    "configured",
+    "regression"
+  ]
+}

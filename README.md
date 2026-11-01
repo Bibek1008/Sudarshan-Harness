@@ -291,3 +291,15 @@ Disable collection with `python -m sudarshan telemetry --disable` or use
 from optional cost estimates; no model prices are bundled or fetched.
 See [observability documentation](docs/OBSERVABILITY.md) for pricing, retention,
 privacy boundaries and limitations. Existing transcript persistence is separate.
+
+
+## Agent evaluation
+
+`python -m sudarshan benchmark list` lists versioned suites; start with
+`python -m sudarshan benchmark run core --dry-run`. The core suite has ten controlled
+software-engineering tasks checked independently after the agent worker stops.
+Live requests require explicit `--live --model MODEL` and consume API quota/money.
+Safe-mode effects remain denied unless workspace edits are explicitly approved;
+there is no automatic YOLO mode. Reports include measurement coverage and distinguish
+mocked pipeline results from real model performance. See [evaluation documentation](docs/EVALUATION.md)
+for metrics, comparisons, retention and the limitations of local verification.
