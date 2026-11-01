@@ -5,55 +5,60 @@ password handling.  File operations run a small quoted Python helper remotely,
 where paths are resolved against the remote root rather than trusted locally.
 """
 
+import inspect
+from .filesystem import WorkspaceFiles, parts_for, FILE_LIMIT
+
 import shlex
 import re
 import shutil
 import subprocess
 import time
+from .process import run_owned, validate_timeout, trusted_executable
 from pathlib import Path
 
 from .base import BackendUnavailable, ExecutionBackend, ExecutionError, ExecutionResult, ExecutionTimeout
 
 
-REMOTE_FILE_HELPER = r'''
-import fnmatch
-import os
-import sys
-from pathlib import Path
-
+# Send the same audited file primitive rather than maintaining a weaker copy.
+REMOTE_FILE_HELPER = "\n".join([
+    "import os, sys, stat, fnmatch",
+    "from pathlib import Path, PureWindowsPath",
+    "from contextlib import contextmanager",
+    "ExecutionPermissionError = PermissionError",
+    f"FILE_LIMIT = {FILE_LIMIT}",
+    inspect.getsource(parts_for),
+    inspect.getsource(WorkspaceFiles),
+    r'''
 root = Path(sys.argv[1]).resolve()
+files = WorkspaceFiles(root)
 action = sys.argv[2]
 path = sys.argv[3] if len(sys.argv) > 3 else ""
-target = (root / Path(path)).resolve()
-try:
-    target.relative_to(root)
-except ValueError:
-    raise PermissionError(f"{path!r} escapes the remote working directory")
-
 if action == "read":
-    print(target.read_text(encoding="utf-8", errors="replace"), end="")
+    print(files.read_text(path), end="")
 elif action == "write":
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(sys.argv[4], encoding="utf-8")
-    print(f"Wrote {len(sys.argv[4])} chars to {path}")
+    files.write_text(path, sys.argv[4])
+    print("File written")
 elif action == "list":
-    pattern = path
     matches = []
-    for directory, names, files in os.walk(root):
-        names[:] = [name for name in names if name not in {".git", "node_modules", "__pycache__", ".venv"}]
-        for name in files:
-            candidate = Path(directory, name)
-            relative = candidate.relative_to(root).as_posix()
-            try:
-                candidate.resolve().relative_to(root)
-            except ValueError:
-                continue
-            if pattern == "**/*" or fnmatch.fnmatch(relative, pattern) or fnmatch.fnmatch(name, pattern):
+    for directory, names, filenames in os.walk(root, followlinks=False):
+        names[:] = [name for name in names if name not in {".git", "node_modules", "__pycache__", ".venv"}
+                    and not Path(directory, name).is_symlink()
+                    and not getattr(Path(directory, name), "is_junction", lambda: False)()]
+        for name in filenames:
+            relative = Path(directory, name).relative_to(root).as_posix()
+            if path == "**/*" or fnmatch.fnmatch(relative, path) or fnmatch.fnmatch(name, path):
+                try:
+                    with files.open(relative):
+                        pass
+                except (OSError, PermissionError):
+                    continue
                 matches.append(relative)
     print("\n".join(sorted(matches)))
 else:
-    raise ValueError(f"unknown remote file action: {action}")
-'''.strip()
+    raise ValueError("unknown remote file action")
+'''.strip(),
+])
+
 
 
 class RemoteExecutionBackend(ExecutionBackend):
@@ -84,7 +89,7 @@ class RemoteExecutionBackend(ExecutionBackend):
 
     def execute(self, command: str, timeout: float = 120) -> ExecutionResult:
         """Execute a policy-approved command after safely changing to remote root."""
-        remote = f"cd -- {shlex.quote(self.workdir)} && exec sh -lc {shlex.quote(command)}"
+        remote = f"cd -- {shlex.quote(self.workdir)} && exec /usr/bin/env -i PATH=/usr/bin:/bin /bin/sh -c {shlex.quote(command)}"
         return self._ssh(remote, timeout)
 
     def read_file(self, path: str) -> ExecutionResult:
@@ -101,7 +106,7 @@ class RemoteExecutionBackend(ExecutionBackend):
 
     def _file_operation(self, action: str, path: str, content: str | None = None) -> ExecutionResult:
         """Run the remote validator helper with every dynamic argument quoted."""
-        arguments = [self.remote_python, "-c", REMOTE_FILE_HELPER, self.workdir, action, path]
+        arguments = ["/usr/bin/env", "-i", "PATH=/usr/bin:/bin", self.remote_python, "-c", REMOTE_FILE_HELPER, self.workdir, action, path]
         if content is not None:
             arguments.append(content)
         remote = " ".join(shlex.quote(argument) for argument in arguments)
@@ -109,7 +114,8 @@ class RemoteExecutionBackend(ExecutionBackend):
 
     def _ssh(self, remote_command: str, timeout: float) -> ExecutionResult:
         """Invoke system SSH without disabling any host-key protections."""
-        executable = shutil.which(self.ssh_executable)
+        timeout = validate_timeout(timeout)
+        executable = trusted_executable(self.ssh_executable, Path.cwd())
         if executable is None:
             raise BackendUnavailable(f"SSH executable {self.ssh_executable!r} is unavailable")
         target = f"{self.username}@{self.host}" if self.username else self.host
@@ -124,11 +130,11 @@ class RemoteExecutionBackend(ExecutionBackend):
         command.extend([target, remote_command])
         started = time.perf_counter()
         try:
-            completed = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
-        except subprocess.TimeoutExpired as error:
-            raise ExecutionTimeout(f"SSH operation timed out after {timeout}s") from error
-        except OSError as error:
-            raise BackendUnavailable(f"could not run SSH: {error}") from error
+            completed = run_owned(command, timeout=timeout)
+        except (subprocess.TimeoutExpired, ExecutionTimeout) as error:
+            raise ExecutionTimeout(f"SSH operation timed out after {timeout}s; remote termination unconfirmed") from None
+        except (OSError, ExecutionError) as error:
+            raise BackendUnavailable("could not run SSH") from None
         elapsed = time.perf_counter() - started
         error = None if completed.returncode == 0 else _ssh_error(completed.returncode)
         return ExecutionResult(completed.stdout, completed.stderr, completed.returncode, self.name, elapsed, error)

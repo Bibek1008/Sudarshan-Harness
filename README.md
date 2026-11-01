@@ -259,3 +259,8 @@ and Viper fixtures. No subsequent assertion, observation error or product
 failure is converted into a skip. Root/container environments must provide a
 browser configuration that supports its sandbox to run these tests; the suite
 never weakens browser security to make them pass.
+
+
+## Quality and execution security repairs
+
+See [QA review](QA_SECURITY_REPORT.md), [execution security review](PHASE2_EXECUTION_SECURITY.md), and [Taskman commands](taskman/README.md). Run `python -m unittest discover -v` for all tests.

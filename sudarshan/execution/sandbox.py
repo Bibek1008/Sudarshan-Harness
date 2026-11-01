@@ -12,6 +12,9 @@ import shutil
 import subprocess
 import time
 import uuid
+from .process import run_owned, validate_timeout, trusted_executable
+from .filesystem import parts_for
+from ..redaction import redact
 from pathlib import Path, PurePosixPath
 
 from .base import (
@@ -92,7 +95,8 @@ class SandboxedExecutionBackend(ExecutionBackend):
 
     def _docker(self, command: str, timeout: float) -> ExecutionResult:
         """Invoke Docker with fixed hardening flags and captured process results."""
-        executable = shutil.which(self.docker_executable)
+        timeout = validate_timeout(timeout)
+        executable = trusted_executable(self.docker_executable, self.root)
         if executable is None:
             raise BackendUnavailable(f"Docker executable {self.docker_executable!r} is unavailable")
         mount = f"type=bind,src={self.root},dst={self.container_workdir},rw"
@@ -101,6 +105,8 @@ class SandboxedExecutionBackend(ExecutionBackend):
             executable, "run", "--rm",
             "--name", container_name,
             "--network", "none",
+            "--pids-limit", "64",
+            "--init",
             "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges",
             "--read-only",
@@ -112,35 +118,47 @@ class SandboxedExecutionBackend(ExecutionBackend):
         ]
         if self.user:
             arguments.extend(["--user", self.user])
-        arguments.extend([self.image, "sh", "-lc", command])
+        arguments.extend([self.image, "sh", "-c", command])
         started = time.perf_counter()
         try:
-            completed = subprocess.run(arguments, capture_output=True, text=True, timeout=timeout)
-        except subprocess.TimeoutExpired as error:
-            # Killing the Docker client does not stop its container. Remove our exact name.
+            completed = run_owned(arguments, timeout=timeout)
+        except BaseException as error:
+            # A client timeout/interruption does not stop a daemon-owned container.
             try:
-                cleanup = subprocess.run([executable, 'rm', '-f', container_name],
-                                         capture_output=True, text=True, timeout=15)
-                if cleanup.returncode and 'No such container' not in cleanup.stderr:
-                    raise ExecutionError(f'container cleanup failed: {container_name}')
-            except (OSError, subprocess.TimeoutExpired, ExecutionError):
-                raise ExecutionTimeout(f'sandbox timed out after {timeout}s; cleanup unconfirmed for {container_name}') from error
-            raise ExecutionTimeout(f"sandbox command timed out after {timeout}s; container removed") from error
-        except OSError as error:
-            raise BackendUnavailable(f"could not run Docker: {error}") from error
+                cleanup = run_owned([executable, "rm", "-f", container_name], timeout=15)
+                cleaned = not cleanup.returncode or "No such container" in cleanup.stderr
+            except BaseException:
+                cleaned = False
+            if not cleaned and isinstance(error, ExecutionTimeout):
+                raise ExecutionTimeout(f"sandbox timed out after {timeout}s; cleanup unconfirmed for {container_name}") from None
+            if not cleaned:
+                raise ExecutionError(f"sandbox cleanup unconfirmed for {container_name}") from None
+            if isinstance(error, ExecutionTimeout):
+                raise ExecutionTimeout(f"sandbox command timed out after {timeout}s; container removed") from None
+            if isinstance(error, (KeyboardInterrupt, SystemExit)):
+                raise
+            raise BackendUnavailable("could not run Docker; container cleanup attempted") from None
         elapsed = time.perf_counter() - started
         error = None if completed.returncode == 0 else f"container exited with {completed.returncode}"
+        if completed.returncode:
+            try:
+                cleanup = run_owned([executable, "rm", "-f", container_name], timeout=15)
+                cleaned = not cleanup.returncode or "No such container" in cleanup.stderr
+            except Exception:
+                cleaned = False
+            error += "; cleanup confirmed" if cleaned else "; cleanup unconfirmed"
         return ExecutionResult(completed.stdout, completed.stderr, completed.returncode, self.name, elapsed, error)
 
     def _relative(self, path: str) -> str:
         """Resolve one host mount path and reject traversal or symlink escapes."""
+        parts_for(path)
         target = (self.root / Path(path)).resolve()
         try:
             return target.relative_to(self.root).as_posix()
         except ValueError as error:
             raise ExecutionPermissionError(
                 f"{path!r} escapes the sandbox working directory"
-            ) from error
+            ) from None
 
 
 def createSandboxedBashOps(workdir: str | Path, **options: object) -> SandboxedExecutionBackend:

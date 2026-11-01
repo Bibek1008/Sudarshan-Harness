@@ -13,6 +13,8 @@ import time
 from pathlib import Path
 
 from ..environment import safe_shell_environment
+from .filesystem import WorkspaceFiles
+from .process import run_owned
 
 from .base import (
     ExecutionBackend,
@@ -37,25 +39,17 @@ class LocalExecutionBackend(ExecutionBackend):
         self.root = Path(workdir).expanduser().resolve()
         if not self.root.is_dir():
             raise ExecutionError(f"local workspace does not exist: {self.root}")
+        self.files = WorkspaceFiles(self.root)
 
     def execute(self, command: str, timeout: float = 120) -> ExecutionResult:
         """Run ``command`` in the workspace and return captured process details."""
         started = time.perf_counter()
         try:
-            completed = subprocess.run(
-                command,
-                shell=True,
-                cwd=self.root,
-                env=_safe_environment(),
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
+            completed = run_owned(command, shell=True, cwd=self.root, timeout=timeout)
         except subprocess.TimeoutExpired as error:
-            raise ExecutionTimeout(f"local command timed out after {timeout}s") from error
+            raise ExecutionTimeout(f"local command timed out after {timeout}s") from None
         except OSError as error:
-            raise ExecutionError(f"could not start local command: {error}") from error
+            raise ExecutionError("could not start local command") from None
         elapsed = time.perf_counter() - started
         error = None if completed.returncode == 0 else f"command exited with {completed.returncode}"
         return ExecutionResult(
@@ -70,27 +64,25 @@ class LocalExecutionBackend(ExecutionBackend):
     def read_file(self, path: str) -> ExecutionResult:
         """Read a UTF-8 text file after validating its resolved target path."""
         started = time.perf_counter()
-        target = self._path(path)
+        self._path(path)
         try:
-            content = target.read_text(encoding="utf-8", errors="replace")
+            content = self.files.read_text(path)
         except PermissionError as error:
-            raise ExecutionPermissionError(str(error)) from error
+            raise ExecutionPermissionError("local file permission denied") from None
         except OSError as error:
-            raise ExecutionError(f"could not read {path!r}: {error}") from error
+            raise ExecutionError(f"could not read {path!r}") from None
         return self._result(content, "", 0, started)
 
     def write_file(self, path: str, content: str) -> ExecutionResult:
         """Write UTF-8 text after validating the target and its parent path."""
         started = time.perf_counter()
-        target = self._path(path)
+        self._path(path)
         try:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            self._path(str(target.parent.relative_to(self.root)))
-            target.write_text(content, encoding="utf-8")
+            self.files.write_text(path, content)
         except PermissionError as error:
-            raise ExecutionPermissionError(str(error)) from error
+            raise ExecutionPermissionError("local file permission denied") from None
         except OSError as error:
-            raise ExecutionError(f"could not write {path!r}: {error}") from error
+            raise ExecutionError(f"could not write {path!r}") from None
         return self._result(f"Wrote {len(content)} chars to {path}", "", 0, started)
 
     def list_files(self, pattern: str = "**/*") -> ExecutionResult:
@@ -98,7 +90,9 @@ class LocalExecutionBackend(ExecutionBackend):
         started = time.perf_counter()
         matches: list[str] = []
         for directory, names, files in os.walk(self.root, followlinks=False):
-            names[:] = [name for name in names if name not in IGNORED_DIRECTORIES]
+            names[:] = [name for name in names if name not in IGNORED_DIRECTORIES
+                        and not Path(directory, name).is_symlink()
+                        and not getattr(Path(directory, name), "is_junction", lambda: False)()]
             for name in files:
                 candidate = Path(directory, name)
                 relative = candidate.relative_to(self.root).as_posix()
@@ -120,7 +114,7 @@ class LocalExecutionBackend(ExecutionBackend):
         except ValueError as error:
             raise ExecutionPermissionError(
                 f"{path!r} escapes the local working directory"
-            ) from error
+            ) from None
         return target
 
     def _result(self, stdout: str, stderr: str, code: int, started: float) -> ExecutionResult:

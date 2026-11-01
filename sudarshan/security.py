@@ -13,6 +13,8 @@ from typing import Any, Callable
 
 READ_TOOLS = {"read_file", "list_files", "grep"}
 DENY_PATTERNS = (
+    r"(?i)\b(?:remove-item|ri|del|erase|rmdir|rd|rm)\b[^\n]*(?:-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?(?=\s|:|$)|/s(?=\s|$))",
+    r"(?i)\b(?:format|clear-disk|initialize-disk)\b",
     r"\brm\s+(?:--?[\w-]+\s+)+(?:/\*?|~/?|\$(?:HOME|\{HOME\})/?)(?=\s|[;&|]|$)",
     # Obvious root/home find deletion, including common traversal options.
     r"\bfind\s+(?:(?:-[HLP]|-O\d+)\s+)*(?:/\*?|~/?|\$(?:HOME|\{HOME\})(?:/[^\s;&|]*)?)(?=\s)[^;\n|&]*\s-delete\b",
@@ -58,6 +60,9 @@ class Policy:
         neither automatic approval nor ``yolo`` can bypass them.  Execution
         adapters may prefix a backend name, but retain the same logical policy.
         """
+        if (not isinstance(call, dict) or not isinstance(call.get("name"), str)
+                or not isinstance(call.get("args", {}), dict)):
+            return "malformed tool call"
         name = _logical_tool_name(call["name"])
         if name == "bash":
             command = call.get("args", {}).get("command")
@@ -69,6 +74,7 @@ class Policy:
                 return "bash command cannot be evaluated safely"
             # Normalize shell quoting for conservative inspection, never for execution.
             inspected = command.replace("'", "").replace('"', '').replace('\\\n', '')
+            inspected = inspected.replace("^", "").replace("`", "")
             if (_dangerous_rm(tokens) or _dangerous_find(command)
                     or any(re.search(pattern, inspected) for pattern in DENY_PATTERNS)):
                 return "dangerous bash command is never allowed"

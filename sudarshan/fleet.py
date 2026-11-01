@@ -13,6 +13,6 @@ def run_fleet(jobs: list[dict[str, str]], make_harness: Callable[[str], Any], ma
         try:
             return {"name": job["name"], "ok": True, "report": make_harness(job["workdir"]).run(job["task"])}
         except Exception as error:
-            return {"name": job["name"], "ok": False, "report": f"{type(error).__name__}: {error}"}
+            return {"name": job.get("name", "<unnamed>"), "ok": False, "report": f"{type(error).__name__}: fleet job failed"}
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         return list(executor.map(run, jobs))

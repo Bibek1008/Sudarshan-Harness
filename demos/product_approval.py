@@ -11,7 +11,8 @@ import sys
 from pathlib import Path
 
 from sudarshan import Harness
-from sudarshan.environment import safe_shell_environment
+from sudarshan.execution.process import run_owned
+from sudarshan.execution.base import ExecutionTimeout
 from sudarshan.security import Policy
 
 
@@ -68,11 +69,9 @@ def product_harness(workdir, **options) -> Harness:
         if not math.isfinite(seconds) or not 0 < seconds <= 120:
             raise ValueError('test timeout must be between 0 and 120 seconds')
         try:
-            result = subprocess.run(
-                [sys.executable, *shlex.split(command)[1:]], shell=False,
-                cwd=root, env=safe_shell_environment(), stdin=subprocess.DEVNULL,
-                capture_output=True, text=True, timeout=seconds)
-        except subprocess.TimeoutExpired:
+            result = run_owned([sys.executable, *shlex.split(command)[1:]],
+                               cwd=root, timeout=seconds)
+        except ExecutionTimeout:
             return 'ERROR: product tests timed out'
         return f'exit {result.returncode}\n' + (result.stdout + result.stderr)[-12000:]
 

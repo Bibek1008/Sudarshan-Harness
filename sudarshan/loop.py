@@ -29,12 +29,14 @@ def run_loop(
 
     After the turn budget, request exactly one tool-free final report.
     """
+    if max_turns < 0:
+        raise ValueError("max_turns must not be negative")
     tool_specs = [tool.spec for tool in tools.values()]
     for _ in range(max_turns):
         if before_turn is not None:
             # Compaction updates the caller's list instead of severing its reference.
             messages[:] = before_turn(messages)
-        reply = provider.complete(model, system, messages, tool_specs)
+        reply = _validated_reply(provider.complete(model, system, messages, tool_specs))
         assistant = {
             "role": "assistant",
             "text": reply["text"],
@@ -59,14 +61,28 @@ def run_loop(
                 try:
                     result = str(tools[name].run(**call["args"]))
                 except Exception as error:
-                    result = f"ERROR: {type(error).__name__}: {error}"
+                    result = f"ERROR: {type(error).__name__}: tool execution failed"
             tool_message = {"role": "tool", "name": name, "text": result}
             messages.append(tool_message)
             on_event("tool_end", tool_message)
     messages.append({"role": "user", "text": "Turn limit reached; wrap up now."})
-    reply = provider.complete(model, system, messages, [])
+    reply = _validated_reply(provider.complete(model, system, messages, []))
     # Even a noncompliant provider cannot execute or leave unpaired final calls.
     assistant = {"role": "assistant", "text": reply["text"], "tool_calls": []}
     messages.append(assistant)
     on_event("assistant", assistant)
     return reply["text"]
+
+
+def _validated_reply(reply: Any) -> dict[str, Any]:
+    """Reject malformed model output before executing any requested effects."""
+    if (not isinstance(reply, dict) or not isinstance(reply.get("text"), str)
+            or not isinstance(reply.get("tool_calls"), list)):
+        raise RuntimeError("Model returned a malformed response")
+    for call in reply["tool_calls"]:
+        if (not isinstance(call, dict) or not isinstance(call.get("name"), str)
+                or not call["name"].strip() or not isinstance(call.get("args"), dict)):
+            raise RuntimeError("Model returned a malformed tool call")
+    if not reply["text"].strip() and not reply["tool_calls"]:
+        raise RuntimeError("Model returned an empty response")
+    return reply

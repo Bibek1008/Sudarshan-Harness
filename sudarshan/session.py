@@ -5,6 +5,9 @@ durable, a malformed tail stops loading safely, and unfinished tool calls gain
 explicit interruption results so the next model turn sees a valid transcript.
 """
 
+from .paths import workspace_path
+from .loop import _validated_reply
+
 import json
 import os
 import re
@@ -18,8 +21,16 @@ SESSION_DIR = ".sudarshan/sessions"
 
 def new_session(workdir: str | Path, label: str = "session") -> Path:
     """Create the session directory and return a timestamped, slugged JSONL path."""
-    directory = Path(workdir).resolve() / SESSION_DIR
-    directory.mkdir(parents=True, exist_ok=True)
+    directory = workspace_path(workdir, SESSION_DIR)
+    for attempt in range(4):
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            break
+        except PermissionError as error:
+            if os.name != "nt" or error.winerror != 5 or attempt == 3:
+                raise
+            # Concurrent Windows directory creation can briefly report access denied.
+            time.sleep(0.01 * (attempt + 1))
     slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")[:40] or "session"
     stamp = int(time.time())
     collision = 0
@@ -57,10 +68,17 @@ def load(path: str | Path) -> list[dict[str, Any]]:
         while line := handle.readline():
             try:
                 message = json.loads(line.decode('utf-8'))
-                if not isinstance(message, dict) or 'role' not in message:
+                if (not isinstance(message, dict) or not isinstance(message.get("role"), str)
+                        or message["role"] not in {"user", "assistant", "tool"}):
                     raise ValueError('not a message')
+                if not isinstance(message.get('text'), str):
+                    raise ValueError('message text must be a string')
+                if message['role'] == 'assistant':
+                    _validated_reply(message)
+                if message['role'] == 'tool' and not isinstance(message.get('name'), str):
+                    raise ValueError('tool result name must be a string')
                 messages.append(message)
-            except (ValueError, UnicodeDecodeError):
+            except (ValueError, UnicodeDecodeError, RuntimeError):
                 # A partial UTF-8 codepoint is also a torn tail; retain valid bytes.
                 handle.seek(valid_end)
                 handle.truncate()
@@ -81,8 +99,8 @@ def load(path: str | Path) -> list[dict[str, Any]]:
 
 def latest(workdir: str | Path) -> Path | None:
     """Return the most recently modified session file, or ``None`` when absent."""
-    directory = Path(workdir).resolve() / SESSION_DIR
-    sessions = list(directory.glob("*.jsonl")) if directory.is_dir() else []
+    directory = workspace_path(workdir, SESSION_DIR)
+    sessions = [workspace_path(workdir, path) for path in directory.glob("*.jsonl")] if directory.is_dir() else []
     return max(sessions, key=lambda path: path.stat().st_mtime) if sessions else None
 
 

@@ -5,6 +5,8 @@ prompt builder resolves its location, preserves supplied facts verbatim, and
 does not need an extra tool call for a fresh conversation to use them.
 """
 
+from .paths import workspace_path
+
 import platform
 from pathlib import Path
 
@@ -27,9 +29,13 @@ def build_system_prompt(workdir: str | Path, extra: str = "") -> str:
     """
     root = Path(workdir).resolve()
     sections = [BASE_SYSTEM_PROMPT, f"Platform: {platform.platform()}\nWorking directory: {root}"]
-    memory = root / MEMORY_FILE
+    memory = workspace_path(root, MEMORY_FILE)
     if memory.is_file():
-        sections.append(f"Project memory ({MEMORY_FILE}):\n{memory.read_text(encoding='utf-8')}")
+        try:
+            text = memory.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            raise ValueError("Cannot read project memory as UTF-8 text; original file preserved") from None
+        sections.append(f"Project memory ({MEMORY_FILE}):\n{text}")
     if extra:
         sections.append(extra)
     return "\n\n".join(sections)
@@ -40,7 +46,7 @@ def remember(workdir: str | Path, note: str) -> str:
 
     Appending preserves earlier decisions in simple, reviewable Markdown.
     """
-    memory = Path(workdir).resolve() / MEMORY_FILE
+    memory = workspace_path(workdir, MEMORY_FILE)
     with memory.open("a", encoding="utf-8") as handle:
         handle.write(f"- {note}\n")
     return f"Remembered in {MEMORY_FILE}"

@@ -11,7 +11,6 @@ import os
 import time
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -42,8 +41,12 @@ def complete(
     if tools:
         body["tools"] = [{"functionDeclarations": [tool["schema"] for tool in tools]}]
 
-    url = f"{API_ROOT}/{model}:generateContent?key={quote(api_key(), safe='')}"
+    if not isinstance(model, str) or not model or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_." for c in model):
+        raise ValueError("Invalid Gemini model name")
+    url = f"{API_ROOT}/{model}:generateContent"
     response = _post(url, body)
+    if not isinstance(response, dict):
+        raise RuntimeError("Gemini returned an invalid response object")
     candidates = response.get('candidates') or []
     candidate = candidates[0] if isinstance(candidates, list) and candidates else {}
     candidate = candidate if isinstance(candidate, dict) else {}
@@ -59,17 +62,20 @@ def complete(
             text.append(part["text"])
         if (isinstance(part.get("functionCall"), dict)
                 and isinstance(part["functionCall"].get("name"), str)
-                and part["functionCall"]["name"].strip()):
+                and part["functionCall"]["name"].strip()
+                and isinstance(part["functionCall"].get("args", {}), dict)):
             call = part["functionCall"]
             calls.append({"name": call["name"], "args": call.get("args", {}),
                           "signature": part.get("thoughtSignature")})
 
     if not ''.join(text).strip() and not calls:
         # Only known feedback enums are safe to surface; free-form feedback may echo input.
-        reason = (response.get('promptFeedback') or {}).get('blockReason')
-        safe_reason = reason if reason in {'SAFETY', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'OTHER'} else 'empty or unusable response'
+        feedback = response.get('promptFeedback')
+        reason = feedback.get('blockReason') if isinstance(feedback, dict) else None
+        safe_reason = reason if isinstance(reason, str) and reason in {'SAFETY', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'OTHER'} else 'empty or unusable response'
         raise RuntimeError(f'Gemini returned no usable candidate: {safe_reason}')
-    metadata = response.get("usageMetadata") or {}
+    metadata = response.get("usageMetadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
     return {"text": "".join(text), "tool_calls": calls,
             "usage": {"input": metadata.get("promptTokenCount", 0),
                       "output": metadata.get("candidatesTokenCount", 0)}}
@@ -101,12 +107,20 @@ def _to_wire(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _post(url: str, body: dict[str, Any], retries: int = 5) -> dict[str, Any]:
     """POST JSON, retrying transient API and network failures with backoff."""
+    if retries < 1:
+        raise ValueError("retries must be positive")
     data = json.dumps(body).encode("utf-8")
-    request = Request(url, data=data, headers={"Content-Type": "application/json"})
+    request = Request(url, data=data, headers={"Content-Type": "application/json", "x-goog-api-key": api_key()})
     for attempt in range(retries):
         try:
             with urlopen(request, timeout=600) as response:
-                return json.loads(response.read().decode("utf-8"))
+                try:
+                    result = json.loads(response.read().decode("utf-8"))
+                except (ValueError, UnicodeError):
+                    raise RuntimeError("Gemini returned malformed JSON") from None
+                if not isinstance(result, dict):
+                    raise RuntimeError("Gemini returned an invalid response object")
+                return result
         except HTTPError as error:
             # Error bodies can echo credentials or request URLs. Never surface them.
             error.close()

@@ -14,7 +14,8 @@ import tempfile
 from html.parser import HTMLParser
 from pathlib import Path
 
-from sudarshan.environment import safe_shell_environment
+from sudarshan.execution.process import run_owned
+from sudarshan.execution.base import ExecutionError
 
 
 class PageFacts(HTMLParser):
@@ -85,8 +86,7 @@ def _read(root: Path, relative: str) -> str:
 
 
 def _run(root, args):
-    return subprocess.run([sys.executable, *args], cwd=root, env=safe_shell_environment(),
-                          stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
+    return run_owned([sys.executable, *args], cwd=root, timeout=30)
 
 
 def _taskman(root, errors, details):
@@ -244,7 +244,7 @@ def verify_product(name, workdir, manual_evidence=None, browser_probe=None):
                           'Exercise pause, restart, game over and persisted high score']
         else:
             errors.append('Unknown product')
-    except (OSError, ValueError, SyntaxError, KeyError, TypeError, subprocess.TimeoutExpired) as error:
+    except (OSError, ValueError, SyntaxError, KeyError, TypeError, subprocess.TimeoutExpired, ExecutionError) as error:
         errors.append(f'{type(error).__name__}: {error}')
     passed = False
     evidence_error = None

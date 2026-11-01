@@ -3,3 +3,9 @@ __pycache__/
 .DS_Store
 .sudarshan/
 work/
+.env
+.env/
+.env.*
+*.pem
+*.key
+tests/tmp*/

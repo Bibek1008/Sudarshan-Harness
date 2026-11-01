@@ -5,6 +5,8 @@ Discovery is deterministic, loading returns original text, and missing names
 produce a usable catalogue error instead of an exception.
 """
 
+from .paths import workspace_path
+
 import re
 from pathlib import Path
 
@@ -14,11 +16,12 @@ SKILLS_DIR = "skills"
 
 def catalog(workdir: str | Path) -> dict[str, dict[str, str]]:
     """Discover workspace ``SKILL.md`` files and their front-matter descriptions."""
-    root = Path(workdir).resolve() / SKILLS_DIR
+    root = workspace_path(workdir, SKILLS_DIR)
     if not root.is_dir():
         return {}
     result: dict[str, dict[str, str]] = {}
     for skill_file in sorted(root.glob("*/SKILL.md")):
+        skill_file = workspace_path(workdir, skill_file)
         text = skill_file.read_text(encoding="utf-8")
         match = re.search(r"^description:\s*(.+?)\s*$", text, flags=re.MULTILINE)
         description = match.group(1).strip().strip('"\'') if match else ""

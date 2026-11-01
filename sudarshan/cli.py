@@ -8,10 +8,12 @@ from typing import Any, Sequence
 
 from .harness import Harness
 from .security import Policy
+from .redaction import redact
 
 
 def _event(kind: str, payload: dict[str, Any]) -> None:
     """Render assistant text and concise tool lifecycle events."""
+    payload = redact(payload)
     if kind == "assistant" and payload["text"]:
         print(payload["text"])
     elif kind == "tool_start":
@@ -23,7 +25,8 @@ def _event(kind: str, payload: dict[str, Any]) -> None:
 
 def _approver(call: dict[str, Any], reason: str) -> bool:
     """Ask for explicit approval, refusing unless the user says yes."""
-    print(f"{reason}: {call['name']}({call.get('args', {})})")
+    displayed = redact(call)
+    print(f"{reason}: {displayed['name']}({displayed.get('args', {})})")
     try:
         return input("approve ...? [y/N] ").strip().lower() in {"y", "yes"}
     except (EOFError, KeyboardInterrupt):

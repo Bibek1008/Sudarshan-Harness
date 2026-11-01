@@ -11,6 +11,7 @@ from typing import Any, Callable, Iterable
 
 from . import context, loop, memory, provider, session, skills
 from .security import Policy
+from .paths import workspace_path
 from .subagent import subagent_tool
 from .tools import Tool, core_tools, tool
 
@@ -47,7 +48,7 @@ class Harness:
         self.enable_subagents = enable_subagents
         self._extra_tools = list(extra_tools.values()) if isinstance(extra_tools, dict) else list(extra_tools or [])
         self.messages: list[dict[str, Any]] = []
-        self.session_path = Path(session_path) if session_path else None
+        self.session_path = workspace_path(self.workdir, session_path) if session_path else None
         self.tools = {item.name: item for item in core_tools(self.workdir)}
         remember_tool = self._remember_tool()
         self.tools[remember_tool.name] = remember_tool
@@ -63,7 +64,7 @@ class Harness:
 
     def resume(self, path: str | Path | None = None) -> bool:
         """Load a selected or newest session and repair interrupted tool-call pairs."""
-        target = Path(path) if path is not None else session.latest(self.workdir)
+        target = workspace_path(self.workdir, path) if path is not None else session.latest(self.workdir)
         if target is None:
             return False
         self.messages = session.load(target)

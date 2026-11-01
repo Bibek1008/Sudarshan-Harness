@@ -5,6 +5,8 @@ Backends return the same immutable-shaped result, while this module translates
 them into the existing Day 2 ``Tool`` interface without bypassing policy.
 """
 
+from ..redaction import redact
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -49,7 +51,7 @@ class ExecutionResult:
             output = f"(exit {self.exit_code}, no output)"
         if self.error:
             output = f"{output}\nERROR: {self.error}".strip()
-        return f"[{self.execution_backend}, {self.execution_time:.3f}s]\n{output}"
+        return redact(f"[{self.execution_backend}, {self.execution_time:.3f}s]\n{output}")
 
 
 class ExecutionBackend(ABC):
@@ -133,7 +135,7 @@ def backend_tools(
         try:
             return operation(*args).text()
         except ExecutionError as error:
-            return f"ERROR: {type(error).__name__}: {error}"
+            return f"ERROR: {type(error).__name__}: execution backend failed"
 
     def make(name: str, description: str, properties: dict[str, str], run: Callable[..., str]) -> Any:
         schema = {
