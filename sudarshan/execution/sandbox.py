@@ -99,7 +99,7 @@ class SandboxedExecutionBackend(ExecutionBackend):
         executable = trusted_executable(self.docker_executable, self.root)
         if executable is None:
             raise BackendUnavailable(f"Docker executable {self.docker_executable!r} is unavailable")
-        mount = f"type=bind,src={self.root},dst={self.container_workdir},rw"
+        mount = f"type=bind,src={self.root},dst={self.container_workdir}"
         container_name = 'sudarshan-' + uuid.uuid4().hex
         arguments = [
             executable, "run", "--rm",

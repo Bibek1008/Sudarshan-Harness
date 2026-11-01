@@ -40,6 +40,9 @@ class SandboxedExecutionBackendTests(unittest.TestCase):
         result = self.backend.execute("python -c 'print(\"hello\")'")
         command = run.call_args.args[0]
         rendered = " ".join(command)
+        mount = command[command.index("--mount") + 1]
+        self.assertEqual(mount, f"type=bind,src={self.backend.root},dst=/workspace")
+        self.assertTrue(all("=" in field for field in mount.split(",")))
         self.assertEqual(result.execution_backend, "sandbox")
         self.assertIn("--network", command)
         self.assertIn("none", command)
