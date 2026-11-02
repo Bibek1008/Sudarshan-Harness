@@ -1,0 +1,50 @@
+name: Build and release Python package
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, packaging-python-wheel]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel and source archive
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+
+      - name: Verify clean wheel installation
+        run: |
+          python -m venv .package-test
+          .package-test/bin/python -m pip install --no-deps dist/*.whl
+          mkdir -p "$RUNNER_TEMP/sudarshan-clean-install"
+          cd "$RUNNER_TEMP/sudarshan-clean-install"
+          "$GITHUB_WORKSPACE/.package-test/bin/sudarshan" --help
+          "$GITHUB_WORKSPACE/.package-test/bin/sudarshan" benchmark list
+          "$GITHUB_WORKSPACE/.package-test/bin/python" -c "from pathlib import Path; from sudarshan.evaluation.registry import BENCHMARKS; allowed = {'.py', '.md', '.txt', '.json'}; bad = [str(p.relative_to(BENCHMARKS)) for p in BENCHMARKS.rglob('*') if p.is_file() and p.suffix not in allowed]; print('unexpected benchmark files:', bad)"
+          "$GITHUB_WORKSPACE/.package-test/bin/python" -c "import sys, sudarshan; from pathlib import Path; from sudarshan import Harness; from sudarshan.evaluation.registry import BENCHMARKS, load_suite; suite = load_suite('core'); assert not Path(sudarshan.__file__).resolve().is_relative_to(Path.cwd()); assert len(suite['tasks']) == 10; print('installed version:', sudarshan.__version__); print('benchmark data:', BENCHMARKS); print('Harness import: OK')"
+          "$GITHUB_WORKSPACE/.package-test/bin/sudarshan" benchmark run core --dry-run
+
+      - name: Publish wheel and source archive to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "Sudarshan $GITHUB_REF_NAME" \
+            --generate-notes

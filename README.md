@@ -13,7 +13,11 @@ configuration, safe coding, sessions and troubleshooting. See
 reports are retained as dated engineering history; their earlier test counts
 are not the current release result.
 
-Clone the repository and run from its root; no pip installer is provided. On
+Install the downloadable wheel from [GitHub Releases](https://github.com/Bibek1008/Sudarshan-Harness/releases) with
+`python -m pip install .\\sudarshan_harness-<version>-py3-none-any.whl`.
+The installed `sudarshan` command works from any application directory; see
+[package installation](docs/PACKAGING.md). Clone the repository only when you
+want to modify the harness source or run its full developer test suite. On
 systems where Python is named `python3`, substitute that for `python` below.
 Gemini requests use `SUDARSHAN_API_KEY`, then legacy `ODYSSEUS_API_KEY`
 (backward compatibility), then generic `GEMINI_API_KEY`. Empty values fall back.

@@ -63,3 +63,24 @@ class EvaluationDefinitionTests(WorkspaceCase):
         prepare(task,suite,self.root)
         self.assertEqual((self.root/"README.md").read_text(),"original fixture")
         self.assertEqual(suite["verifier_source"],"# original hidden verifier")
+
+    def test_generated_bytecode_is_not_a_benchmark_fixture(self):
+        import shutil
+        from sudarshan.evaluation import registry
+
+        copied = self.base / "benchmark-copy"
+        shutil.copytree(registry.BENCHMARKS / "core", copied / "core")
+        fixture = copied / "core" / "fixtures" / "median"
+        cache = fixture / "__pycache__"
+        cache.mkdir()
+        artifact = cache / "solution.cpython-312.pyc"
+        artifact.write_bytes(b"generated cache data")
+
+        with patch.object(registry, "BENCHMARKS", copied):
+            first = registry.load_suite()
+            artifact.write_bytes(b"changed generated cache data")
+            second = registry.load_suite()
+
+        self.assertEqual(first["fingerprint"], second["fingerprint"])
+        self.assertNotIn("__pycache__/solution.cpython-312.pyc",
+                         first["fixtures"]["median"])

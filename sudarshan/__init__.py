@@ -10,4 +10,6 @@ from .fleet import run_fleet
 from .security import Policy
 from .tools import Tool, tool
 
-__all__ = ["Harness", "Policy", "Tool", "run_fleet", "tool"]
+__version__ = "1.0.1"
+
+__all__ = ["Harness", "Policy", "Tool", "__version__", "run_fleet", "tool"]
