@@ -1,0 +1,20 @@
+{
+  "id": "median",
+  "name": "Repair odd and even median",
+  "category": "debugging",
+  "version": "1.0.0",
+  "description": "Repair odd and even median",
+  "instructions": "Repair median(values) in solution.py. Return the median of a sorted copy, averaging the middle two for even lengths. Empty input raises ValueError; do not mutate input.",
+  "fixture": "median",
+  "verifier": "core-v1",
+  "seconds": 90,
+  "turns": 12,
+  "deliverables": [
+    "solution.py"
+  ],
+  "criteria": [
+    "even",
+    "odd_unchanged",
+    "empty"
+  ]
+}

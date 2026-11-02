@@ -6,6 +6,12 @@ and response parsing.  It uses only the Python standard library and preserves
 model thought signatures exactly, so later tool turns remain valid.
 """
 
+from . import telemetry
+
+from contextvars import ContextVar
+
+REQUEST_DEADLINE = ContextVar("gemini_request_deadline", default=None)
+
 import json
 import os
 import time
@@ -77,6 +83,7 @@ def complete(
     metadata = response.get("usageMetadata")
     metadata = metadata if isinstance(metadata, dict) else {}
     return {"text": "".join(text), "tool_calls": calls,
+            "usage_details": telemetry.usage_metadata(metadata),
             "usage": {"input": metadata.get("promptTokenCount", 0),
                       "output": metadata.get("candidatesTokenCount", 0)}}
 
@@ -113,7 +120,13 @@ def _post(url: str, body: dict[str, Any], retries: int = 5) -> dict[str, Any]:
     request = Request(url, data=data, headers={"Content-Type": "application/json", "x-goog-api-key": api_key()})
     for attempt in range(retries):
         try:
-            with urlopen(request, timeout=600) as response:
+            deadline = REQUEST_DEADLINE.get()
+            remaining = deadline - time.monotonic() if deadline is not None else 600
+            if remaining <= 0: raise TimeoutError("request deadline")
+            recorder = telemetry.ACTIVE.get()
+            if attempt and recorder and recorder.request_id:
+                telemetry.emit("model_retry", request_id=recorder.request_id, status="started", error_category="model_error")
+            with urlopen(request, timeout=min(600, remaining)) as response:
                 try:
                     result = json.loads(response.read().decode("utf-8"))
                 except (ValueError, UnicodeError):
@@ -131,6 +144,10 @@ def _post(url: str, body: dict[str, Any], retries: int = 5) -> dict[str, Any]:
             failure = "network or timeout error"
         if attempt == retries - 1:
             raise RuntimeError(f"Gemini request failed after {retries} attempts: {failure}") from None
-        time.sleep(2**attempt * 2)
+        delay = 2**attempt * 2
+        deadline = REQUEST_DEADLINE.get()
+        if deadline is not None and time.monotonic() + delay >= deadline:
+            raise RuntimeError("Gemini request deadline exceeded") from None
+        time.sleep(delay)
 
     raise AssertionError("retry loop must either return or raise")

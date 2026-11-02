@@ -1,0 +1,21 @@
+{
+  "id": "csv",
+  "name": "Implement parsing and statistics across modules",
+  "category": "multistep",
+  "version": "1.0.0",
+  "description": "Implement parsing and statistics across modules",
+  "instructions": "Create parse.py parse_csv(text): parse one comma-separated row of integers, allowing whitespace, returning [] for empty/whitespace input and ValueError for invalid fields. Create stats.py summarize(text) using parse_csv: return count, sum and mean (None for an empty row).",
+  "fixture": "csv",
+  "verifier": "core-v1",
+  "seconds": 90,
+  "turns": 12,
+  "deliverables": [
+    "parse.py",
+    "stats.py"
+  ],
+  "criteria": [
+    "parse",
+    "summary",
+    "errors_empty"
+  ]
+}

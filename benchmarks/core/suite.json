@@ -1,0 +1,16 @@
+{
+  "name": "core",
+  "version": "1.0.0",
+  "tasks": [
+    "slug",
+    "ledger",
+    "median",
+    "tests",
+    "ranges",
+    "port",
+    "config",
+    "orders",
+    "unique",
+    "csv"
+  ]
+}

@@ -5,6 +5,8 @@ of destructive shell forms is never delegated, read tools remain frictionless,
 and every other effect requires the mode's stated authority.
 """
 
+from . import telemetry
+
 import re
 import shlex
 import posixpath
@@ -83,7 +85,9 @@ class Policy:
         if self.mode == "read-only":
             return "read-only mode allows only read tools"
         reason = f"{name} may modify files or run commands"
+        telemetry.emit("tool_approval_requested", status="started", tool=telemetry.label(name), approval="requested")
         if self.approver(call, reason):
+            telemetry.emit("tool_approval_granted", tool=telemetry.label(name), approval="granted")
             return None
         return "approval was declined"
 

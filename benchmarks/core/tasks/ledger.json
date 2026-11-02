@@ -1,0 +1,21 @@
+{
+  "id": "ledger",
+  "name": "Build a small persistent ledger",
+  "category": "application",
+  "version": "1.0.0",
+  "description": "Build a small persistent ledger",
+  "instructions": "Create storage.py with save(path, items) and load(path), using a UTF-8 JSON list. Missing storage returns []. Create app.py with total(path) returning sum of stored numbers. Preserve values across independent loads.",
+  "fixture": "ledger",
+  "verifier": "core-v1",
+  "seconds": 90,
+  "turns": 12,
+  "deliverables": [
+    "storage.py",
+    "app.py"
+  ],
+  "criteria": [
+    "roundtrip",
+    "missing",
+    "application"
+  ]
+}

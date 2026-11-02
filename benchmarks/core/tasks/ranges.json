@@ -1,0 +1,20 @@
+{
+  "id": "ranges",
+  "name": "Implement range parser from visible tests",
+  "category": "tdd",
+  "version": "1.0.0",
+  "description": "Implement range parser from visible tests",
+  "instructions": "Implement parse_range(text) in solution.py so the supplied tests pass. Format is two ascending integers separated by one colon; return all inclusive integers as a list. Reject malformed/descending input with ValueError.",
+  "fixture": "ranges",
+  "verifier": "core-v1",
+  "seconds": 90,
+  "turns": 12,
+  "deliverables": [
+    "solution.py"
+  ],
+  "criteria": [
+    "inclusive",
+    "negative",
+    "invalid"
+  ]
+}

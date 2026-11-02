@@ -1,0 +1,21 @@
+{
+  "id": "tests",
+  "name": "Generate behavioral unit tests",
+  "category": "testing",
+  "version": "1.0.0",
+  "description": "Generate behavioral unit tests",
+  "instructions": "Create test_solution.py unittest tests for solution.clamp(value, low, high). Cover values below, inside and above inclusive bounds, and reversed bounds raising ValueError. Tests must detect broken implementations, not merely import the module.",
+  "fixture": "tests",
+  "verifier": "core-v1",
+  "seconds": 90,
+  "turns": 12,
+  "deliverables": [
+    "solution.py",
+    "test_solution.py"
+  ],
+  "criteria": [
+    "tests_pass",
+    "reject_low_mutant",
+    "reject_reversed_mutant"
+  ]
+}

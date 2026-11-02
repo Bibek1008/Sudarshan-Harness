@@ -27,6 +27,7 @@ class Tool:
     name: str
     spec: dict[str, Any]
     run: Callable[..., Any]
+    execution_backend: str | None = None
 
 
 def tool(description: str, **params: str) -> Callable[[Callable[..., Any]], Tool]:
@@ -175,4 +176,6 @@ def core_tools(workdir: str) -> list[Tool]:
                         return "\n".join(hits)
         return "\n".join(hits)
 
-    return [read_file, write_file, edit_file, bash, list_files, grep]
+    result = [read_file, write_file, edit_file, bash, list_files, grep]
+    for item in result: item.execution_backend = "local"
+    return result
