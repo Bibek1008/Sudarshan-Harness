@@ -32,12 +32,12 @@ jobs:
         run: |
           python -m venv .package-test
           .package-test/bin/python -m pip install --no-deps dist/*.whl
-          .package-test/bin/sudarshan --help
-          .package-test/bin/sudarshan benchmark list
-          .package-test/bin/python -c "from sudarshan.evaluation.registry import load_suite; suite = load_suite('core'); print('suite resource root:', suite['root'], 'tasks:', len(suite['tasks']))"
-          .package-test/bin/python -c "from sudarshan.evaluation.runner import dry_run; report = dry_run('core'); print('dry-run model requests:', report['model_requests_made'])"
-          .package-test/bin/sudarshan benchmark run core --dry-run
-          .package-test/bin/python -c "import sudarshan; from sudarshan import Harness; print('installed version:', sudarshan.__version__); print('Harness import: OK')"
+          mkdir -p "$RUNNER_TEMP/sudarshan-clean-install"
+          cd "$RUNNER_TEMP/sudarshan-clean-install"
+          "$GITHUB_WORKSPACE/.package-test/bin/sudarshan" --help
+          "$GITHUB_WORKSPACE/.package-test/bin/sudarshan" benchmark list
+          "$GITHUB_WORKSPACE/.package-test/bin/python" -c "import sys, sudarshan; from pathlib import Path; from sudarshan import Harness; from sudarshan.evaluation.registry import BENCHMARKS, load_suite; suite = load_suite('core'); assert not Path(sudarshan.__file__).resolve().is_relative_to(Path.cwd()); assert len(suite['tasks']) == 10; print('installed version:', sudarshan.__version__); print('benchmark data:', BENCHMARKS); print('Harness import: OK')"
+          "$GITHUB_WORKSPACE/.package-test/bin/sudarshan" benchmark run core --dry-run
 
       - name: Publish wheel and source archive to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
