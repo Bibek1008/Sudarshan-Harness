@@ -36,6 +36,7 @@ jobs:
           cd "$RUNNER_TEMP/sudarshan-clean-install"
           "$GITHUB_WORKSPACE/.package-test/bin/sudarshan" --help
           "$GITHUB_WORKSPACE/.package-test/bin/sudarshan" benchmark list
+          "$GITHUB_WORKSPACE/.package-test/bin/python" -c "from pathlib import Path; from sudarshan.evaluation.registry import BENCHMARKS; allowed = {'.py', '.md', '.txt', '.json'}; bad = [str(p.relative_to(BENCHMARKS)) for p in BENCHMARKS.rglob('*') if p.is_file() and p.suffix not in allowed]; print('unexpected benchmark files:', bad)"
           "$GITHUB_WORKSPACE/.package-test/bin/python" -c "import sys, sudarshan; from pathlib import Path; from sudarshan import Harness; from sudarshan.evaluation.registry import BENCHMARKS, load_suite; suite = load_suite('core'); assert not Path(sudarshan.__file__).resolve().is_relative_to(Path.cwd()); assert len(suite['tasks']) == 10; print('installed version:', sudarshan.__version__); print('benchmark data:', BENCHMARKS); print('Harness import: OK')"
           "$GITHUB_WORKSPACE/.package-test/bin/sudarshan" benchmark run core --dry-run
 
