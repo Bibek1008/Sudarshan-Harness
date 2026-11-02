@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel>=0.41"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sudarshan-harness"
+version = "1.0.1"
+description = "A compact, standard-library Python coding-agent harness"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Code Generators",
+]
+
+[project.scripts]
+sudarshan = "sudarshan.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Bibek1008/Sudarshan-Harness"
+Repository = "https://github.com/Bibek1008/Sudarshan-Harness"
+Documentation = "https://github.com/Bibek1008/Sudarshan-Harness/blob/main/docs/PACKAGING.md"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sudarshan", "sudarshan.*", "benchmarks"]
+exclude = ["tests*", "demos*", "taskman*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+benchmarks = ["**/*"]
