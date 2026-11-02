@@ -14,7 +14,7 @@ from . import provider, telemetry
 
 def run_loop(
     model: str,
-    system: str,
+    system: str | Callable[[], str],
     messages: list[dict[str, Any]],
     tools: dict[str, Any],
     on_event: Callable[[str, dict[str, Any]], None],
@@ -40,7 +40,7 @@ def run_loop(
         if before_turn is not None:
             # Compaction updates the caller's list instead of severing its reference.
             messages[:] = before_turn(messages)
-        reply = telemetry.request(model, lambda: _validated_reply(provider.complete(model, system, messages, tool_specs)))
+        reply = telemetry.request(model, lambda: _validated_reply(provider.complete(model, system() if callable(system) else system, messages, tool_specs)))
         assistant = {
             "role": "assistant",
             "text": reply["text"],
@@ -99,7 +99,7 @@ def run_loop(
     recorder = telemetry.ACTIVE.get()
     if recorder: recorder.turn = max_turns + 1
     messages.append({"role": "user", "text": "Turn limit reached; wrap up now."})
-    reply = telemetry.request(model, lambda: _validated_reply(provider.complete(model, system, messages, [])))
+    reply = telemetry.request(model, lambda: _validated_reply(provider.complete(model, system() if callable(system) else system, messages, [])))
     # Even a noncompliant provider cannot execute or leave unpaired final calls.
     assistant = {"role": "assistant", "text": reply["text"], "tool_calls": []}
     messages.append(assistant)

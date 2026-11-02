@@ -53,6 +53,7 @@ class Harness:
         self.enable_subagents = enable_subagents
         self._extra_tools = list(extra_tools.values()) if isinstance(extra_tools, dict) else list(extra_tools or [])
         self.messages: list[dict[str, Any]] = []
+        self._original_task = ""
         self.session_path = workspace_path(self.workdir, session_path) if session_path else None
         self.tools = {item.name: item for item in core_tools(self.workdir)}
         remember_tool = self._remember_tool()
@@ -64,8 +65,19 @@ class Harness:
             agent_tool = subagent_tool(self._make_child, depth=_depth)
             self.tools[agent_tool.name] = agent_tool
         self.tools.update({item.name: item for item in self._extra_tools})
-        extra = "\n\n".join(part for part in (skills.catalog_prompt(self.workdir), system_extra) if part)
-        self.system = memory.build_system_prompt(self.workdir, extra)
+        self._prompt_extra = "\n\n".join(part for part in (skills.catalog_prompt(self.workdir), system_extra) if part)
+        self.system = self._system_prompt("")
+
+    def _system_prompt(self, task: str) -> str:
+        """Refresh bounded project facts; unreadable memory never stops a session."""
+        allowance = min(memory.MEMORY_TOKENS, max(0, self.budget_tokens // 8))
+        workspace_path(self.workdir, memory.MEMORY_FILE)
+        try:
+            return memory.build_system_prompt(self.workdir, self._prompt_extra,
+                                              task=task, memory_tokens=allowance)
+        except (OSError, ValueError):
+            return memory.build_system_prompt(self.workdir, self._prompt_extra,
+                                              memory_tokens=0) + "\n\nProject memory unavailable; inspect or repair SUDARSHAN.md. Original file preserved."
 
     def resume(self, path: str | Path | None = None) -> bool:
         """Load a selected or newest session and repair interrupted tool-call pairs."""
@@ -73,6 +85,8 @@ class Harness:
         if target is None:
             return False
         self.messages = session.load(target)
+        self._original_task = next((message["text"] for message in self.messages
+                                    if message["role"] == "user"), "")
         self.session_path = target
         return True
 
@@ -106,6 +120,9 @@ class Harness:
 
     def _run(self, task: str) -> str:
         """Record one task, run the loop, and persist each event-produced message."""
+        self.system = self._system_prompt(task)
+        if not self._original_task:
+            self._original_task = task
         if self.persist and self.session_path is None:
             self.session_path = session.new_session(self.workdir, task[:32])
         self.messages.append({"role": "user", "text": task})
@@ -120,13 +137,22 @@ class Harness:
         def before_turn(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
             """Compact in place while keeping the persisted-message cursor valid."""
             nonlocal recorded
-            compacted = context.compact(self.model, messages, self.budget_tokens)
+            self.system = self._system_prompt(task)
+            # Estimates guide compaction; only telemetry reports measured usage.
+            transcript_budget = max(1, self.budget_tokens - context.estimate_text_tokens(self.system))
+            compacted = context.compact(self.model, messages, transcript_budget,
+                                        original_task=self._original_task)
             # A summary replaces prior records; never index past the compacted transcript.
             recorded = min(recorded, len(compacted))
             return compacted
 
+        def current_system() -> str:
+            """Also refresh for the tool-free wrap-up after the turn limit."""
+            self.system = self._system_prompt(task)
+            return self.system
+
         result = loop.run_loop(
-            self.model, self.system, self.messages, self.tools, record_event,
+            self.model, current_system, self.messages, self.tools, record_event,
             self._check_tool, max_turns=self.max_turns, before_turn=before_turn,
         )
         self._record_from(min(recorded, len(self.messages)))
@@ -147,10 +173,14 @@ class Harness:
 
     def _remember_tool(self) -> Tool:
         """Build the workspace-bound durable-memory tool."""
-        @tool("Remember a durable project fact.", note="Fact to append to project memory.")
-        def remember(note: str) -> str:
-            """Append one project fact to this harness workspace's memory file."""
-            return memory.remember(self.workdir, note)
+        @tool("Save or explicitly update a durable project fact. Never save secrets or personal data.",
+              note="Single-line fact; empty only to delete the exact replaces fact.",
+              section="Optional section: " + ", ".join(memory.SECTIONS),
+              replaces="Exact existing bullet text to replace or remove; never inferred.",
+              verified="Optional YYYY-MM-DD date supported by evidence; otherwise leave empty.")
+        def remember(note: str, section: str = "", replaces: str = "", verified: str = "") -> str:
+            """Use the normal policy approval boundary for every memory mutation."""
+            return memory.remember(self.workdir, note, section, replaces, verified)
 
         return remember
 

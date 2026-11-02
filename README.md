@@ -65,8 +65,59 @@ thought signatures. A turn-limit wrap-up disables tools and returns a final
 report. `before_turn` compacts overflow using one factual summary call and
 retains recent messages without a leading orphaned tool response.
 
-`SUDARSHAN.md` is durable project memory injected into each new system prompt;
-the `remember` tool appends facts. `skills/<name>/SKILL.md` is discoverable via
+`SUDARSHAN.md` is durable, editable project memory, refreshed before agent turns.
+The resolved `-d` working directory identifies the project: launch from the same
+project root across sessions. Memory never searches parent or sibling projects.
+The `remember(note)` tool still appends facts and ignores duplicates (case and
+whitespace differences). Optional `section` groups facts under Purpose,
+Architecture, Directories and modules, Coding conventions, Build and test,
+Dependencies, Decisions, Known limitations, or History. Existing Markdown stays
+editable; no migration is required.
+
+To correct a fact, pass its exact bullet text in `replaces` and the new `note`.
+To remove it, pass `note=""` with `replaces`. Missing, ambiguous, or multiline
+targets require manual review and are left unchanged. Updates retain the existing
+section. Optional `verified="YYYY-MM-DD"` records a non-future evidence date;
+use it only after checking the fact. Sectioned facts and updates also record an
+update date in a small Markdown comment. For example, through the Python API:
+
+```python
+from sudarshan.memory import remember
+
+remember(".", "Run python -m unittest discover -v", section="Build and test")
+remember(".", "Use SQLite", section="Decisions")
+remember(".", "Use PostgreSQL", replaces="Use SQLite")
+remember(".", "", replaces="Use PostgreSQL")
+```
+
+Memory is capped at 64 KiB; oversized writes preserve the original file. Retrieval
+selects whole facts using task-word overlap, explicit verification/update dates,
+and file order. Core project sections and legacy unsectioned facts remain eligible
+across tasks. Other sections need relevant words. The prompt receives at most
+1,200 estimated tokens of memory (at most one eighth of the configured context
+budget). These are character estimates, separate from provider usage telemetry.
+System text is reserved before transcript compaction. Compaction keeps recent
+tool interactions, pins the original task, and summarizes older work without
+copying project memory into every summary. The context budget remains a soft
+compaction threshold: essential recent messages, original constraints, tool
+schemas, and a large summary can exceed it; it is not a provider-token limit.
+
+Memory writes require the existing tool policy approval. There is no automatic
+extraction from project files, `.env`, conversations, or personal data. Recognizable
+credential assignments, common API-key formats, private keys, and common personal
+identifiers are rejected by the memory tool and omitted from retrieved facts.
+Pattern matching cannot identify every arbitrary secret; review saved facts.
+Memory is reference data, never authorization to rewrite instructions. Generic
+approved filesystem/shell tools and manual editors retain their existing powers.
+
+Cooperating memory writers serialize through `.sudarshan-memory.lock` and replace
+the file atomically; unrelated text is preserved. After an interrupted writer,
+inspect the lock and remove it manually only when no writer is running. Manual
+editors do not participate in this lock. Corrupt or unreadable memory is preserved
+and skipped by Harness with a context notice; direct memory API calls raise a
+safe error. Escaping metadata paths remain errors.
+
+`skills/<name>/SKILL.md` is discoverable via
 `catalog_prompt`; `use_skill` loads the full document on demand.
 
 Sessions live in `.sudarshan/sessions/` (ignored by Git). Resume truncates torn
