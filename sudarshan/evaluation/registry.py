@@ -42,6 +42,11 @@ def load_suite(name="core"):
         if not fixture.is_dir() or linked(fixture): raise ValueError("missing or linked fixture")
         snapshots[task.id] = {}
         for file in sorted(fixture.rglob("*")):
+            relative_path = file.relative_to(fixture)
+            # Importing bundled Python fixtures may create bytecode caches in
+            # site-packages. They are runtime artifacts, not benchmark inputs.
+            if "__pycache__" in relative_path.parts or file.suffix in {".pyc", ".pyo"}:
+                continue
             if linked(file): raise ValueError("fixture links not permitted")
             if file.is_file():
                 relative = safe_relative(file.relative_to(fixture).as_posix())
