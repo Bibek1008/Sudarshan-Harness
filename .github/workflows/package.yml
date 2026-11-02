@@ -34,6 +34,8 @@ jobs:
           .package-test/bin/python -m pip install --no-deps dist/*.whl
           .package-test/bin/sudarshan --help
           .package-test/bin/sudarshan benchmark list
+          .package-test/bin/python -c "from sudarshan.evaluation.registry import load_suite; suite = load_suite('core'); print('suite resource root:', suite['root'], 'tasks:', len(suite['tasks']))"
+          .package-test/bin/python -c "from sudarshan.evaluation.runner import dry_run; report = dry_run('core'); print('dry-run model requests:', report['model_requests_made'])"
           .package-test/bin/sudarshan benchmark run core --dry-run
           .package-test/bin/python -c "import sudarshan; from sudarshan import Harness; print('installed version:', sudarshan.__version__); print('Harness import: OK')"
 
