@@ -108,7 +108,11 @@ unchanged, preserving their original claims and dates.
 
 Baseline: **369 run, 355 passed, 14 skipped, zero failures/errors**, Windows/Python
 3.12. Final local and hosted results are recorded in the
-[final report](../FINAL_PROJECT_REPORT.md). Compilation, CLI help, provider-free
+[final report](../FINAL_PROJECT_REPORT.md): **380 run, 366 passed, 14 skipped,
+zero failures/errors** locally. All five
+[hosted jobs](https://github.com/Bibek1008/Sudarshan-Harness/actions/runs/41429719803)
+passed for source commit `91ddd67`, including Windows/Ubuntu on Python 3.10/3.12
+and three live disposable-Docker tests. Compilation, CLI help, provider-free
 diagnostics, benchmark dry-run, Git whitespace and sensitive-file checks are part
 of the final gate. Eleven focused regressions are added; no coverage is removed.
 
@@ -117,4 +121,8 @@ The final structure is unchanged apart from the new documents/tests; see the
 validation evidence and unidentified temporary workspaces remain ignored and
 untouched. Remaining issues are the existing OS-isolation/SSH/race/heuristic
 filtering/context-budget limits in [security](SECURITY.md), not an additional
-development phase. Main remains unchanged pending an approved review and merge.
+development phase. All intended changes are committed on the feature branch;
+the working tree and staged index are clean. No generated files, credential
+files, personal identifiers or runtime transcripts were added. The branch
+includes fetched main `727d712`; no force-push, reset, history rewrite or unrelated
+change was used. Main remains unchanged pending an approved review and merge.

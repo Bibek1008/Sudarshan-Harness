@@ -35,8 +35,11 @@ session logs, telemetry schema, and evaluation definitions are preserved.
 There is still no pip installer: run `python -m sudarshan` from the checkout.
 
 The baseline full suite ran 369 tests: 355 passed and 14 were skipped on Windows.
-Final local and hosted results are recorded in the [final report](FINAL_PROJECT_REPORT.md).
-Only mocked provider/offline verification is authorized for this release work;
+Final local validation ran 380 tests: 366 passed, 14 skipped, zero failures/errors.
+All five [hosted jobs](https://github.com/Bibek1008/Sudarshan-Harness/actions/runs/41429719803)
+passed, including Windows/Ubuntu Python 3.10/3.12 and live disposable Docker.
+Detailed counts and limitations are recorded in the [final report](FINAL_PROJECT_REPORT.md).
+Model-facing verification uses mocked providers;
 no live Gemini request or live-product acceptance is claimed.
 
 ## Known limits

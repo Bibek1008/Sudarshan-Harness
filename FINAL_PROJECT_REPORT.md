@@ -43,7 +43,7 @@ errors**. Compilation and CLI help passed. Benchmark dry-run reported zero model
 requests, and provider-free stats completed. Markdown links, Git whitespace,
 tracked/planned filenames, recognizable credential values and non-fixture email
 addresses were checked without opening credential files. No real Gemini request
-was made by these release checks. Hosted CI results are recorded below once run.
+was made by these release checks. Hosted CI results are recorded below.
 First-run missing-credential handling uses an empty test environment and a blocked
 network mock. Existing scripted tests cover safe coding, multi-file creation,
 debugging, sessions, memory, telemetry and independent benchmark verification;
@@ -66,10 +66,25 @@ reclassified to make validation pass.
 
 ### Hosted CI
 
-The existing four Windows/Ubuntu Python 3.10/3.12 jobs and separate Ubuntu Docker
-job are enabled for `phase-7-final-polish`. Execution and job results will be
-linked after the reviewed source commit is pushed. No live Gemini request is
-part of that workflow.
+All five jobs passed for reviewed source commit
+`91ddd673f6ef7cba23ba228eded33c2d9517bdad` in
+[hosted run 41429719803](https://github.com/Bibek1008/Sudarshan-Harness/actions/runs/41429719803).
+This evidence was added in a subsequent documentation-only commit; no tested
+Python source, fixtures, tests or workflow behavior changed after that run.
+
+| Hosted job | Tests run | Passed | Skipped | Result |
+| --- | ---: | ---: | ---: | --- |
+| Windows / Python 3.10 | 377 | 369 | 8 | Passed |
+| Windows / Python 3.12 | 377 | 369 | 8 | Passed |
+| Ubuntu / Python 3.10 | 380 | 367 | 13 | Passed |
+| Ubuntu / Python 3.12 | 380 | 367 | 13 | Passed |
+| Ubuntu / live disposable Docker | 3 | 3 | 0 | Passed |
+
+Platform/runtime-dependent class availability accounts for differing discovered
+counts. Skips remain explicit in the uploaded diagnostics; the browser sandbox
+and security assertions were not weakened. The four matrix jobs include compile,
+full unittest discovery and CLI help. Docker logs explicitly report integration
+passed. No real Gemini request is part of the workflow.
 
 ## Repository layout
 
@@ -108,7 +123,8 @@ may need stale-lock recovery; and context budgeting is a soft character estimate
 There is no bundled model pricing or automatic model-availability lookup. No live
 Gemini benchmarking, product build, real-world acceptance, or personal SSH test
 was run. Optional/platform-specific skips remain visible. Python 3.10 and Ubuntu
-results require the hosted matrix, rather than being inferred from local Windows.
+results above come from the hosted matrix, rather than being inferred from local
+Windows. Personal SSH and live model/product validation remain outside this run.
 
 This feature branch is committed/pushed for review, with no automatic merge to
 main. After successful review and an approved merge, planned development is
