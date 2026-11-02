@@ -28,14 +28,15 @@ class FrontDoorTests(unittest.TestCase):
         self.assertEqual(factory.call_args.kwargs['policy'].mode, 'safe')
 
     def test_read_only_override_and_interrupt(self):
-        """Headless interruption returns 130 and actionable resume guidance."""
+        """Headless interruption returns 130 without promising an absent log."""
         with patch.object(cli, 'Harness') as factory, contextlib.redirect_stdout(io.StringIO()) as output:
             factory.return_value.run.side_effect = KeyboardInterrupt
             with self.assertRaises(SystemExit) as error:
                 cli.main(['-p', 'task', '--mode', 'read-only'])
         self.assertEqual(error.exception.code, 130)
         self.assertEqual(factory.call_args.kwargs['policy'].mode, 'read-only')
-        self.assertIn('--resume', output.getvalue())
+        self.assertIn('Interrupted', output.getvalue())
+        self.assertNotIn('--resume', output.getvalue())
 
     def test_approval_refuses_by_default(self):
         """Blank, negative, and interrupted replies cannot approve an effect."""

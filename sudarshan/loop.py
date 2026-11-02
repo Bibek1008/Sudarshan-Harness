@@ -9,7 +9,7 @@ from typing import Any, Callable
 
 import time
 import uuid
-from . import provider, telemetry
+from . import provider, telemetry, error_reporting
 
 
 def run_loop(
@@ -75,6 +75,7 @@ def run_loop(
                 try:
                     result = str(tools[name].run(**call["args"]))
                 except Exception as error:
+                    error_reporting.report_tool_error(error)
                     result = f"ERROR: {type(error).__name__}: tool execution failed"
                     failed = True
                     from .execution.base import ExecutionTimeout
