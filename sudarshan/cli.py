@@ -7,7 +7,6 @@ import argparse
 import json
 import sys
 from .telemetry import Store
-from . import telemetry as diagnostics
 from typing import Any, Sequence
 
 from .harness import Harness
@@ -44,13 +43,13 @@ def main(argv: Sequence[str] | None = None) -> None:
         from .evaluation.cli import main as benchmark_main
         return benchmark_main(actual_argv[1:])
     parser = argparse.ArgumentParser(description="Sudarshan, the small sharp coding agent.", epilog="Benchmark commands: python -m sudarshan benchmark --help")
-    parser.add_argument("-p", "--prompt")
-    parser.add_argument("-d", "--workdir", default=".")
-    parser.add_argument("-m", "--model")
+    parser.add_argument("-p", "--prompt", help="Run one task and exit (may make Gemini requests)")
+    parser.add_argument("-d", "--workdir", default=".", help="Project root for files, memory and sessions (default: current directory)")
+    parser.add_argument("-m", "--model", help="Gemini model identifier; otherwise ODYSSEUS_MODEL or the provider default")
     parser.add_argument("--mode", choices=("safe", "yolo", "read-only"), default="safe",
                         help="approval policy (default: safe); yolo skips approval and is not a sandbox")
-    parser.add_argument("--resume", nargs="?", const="")
-    parser.add_argument("--max-turns", type=int, default=120)
+    parser.add_argument("--resume", nargs="?", const="", help="Resume the latest transcript, or a path inside the project")
+    parser.add_argument("--max-turns", type=int, default=120, help="Maximum tool-capable turns before a final report (default: 120; minimum: 0)")
     parser.add_argument("--no-telemetry", action="store_true", help="Disable metadata telemetry for this invocation")
     parser.add_argument("diagnostic", nargs="?", choices=("stats", "trace", "telemetry"))
     parser.add_argument("--session", help="Opaque telemetry session UUID")
@@ -60,6 +59,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     toggles.add_argument("--disable", action="store_true")
     toggles.add_argument("--enable", action="store_true")
     args = parser.parse_args(actual_argv)
+    if args.max_turns < 0:
+        parser.error("--max-turns must be zero or greater")
     if args.last is not None and args.last < 1: parser.error("--last must be positive")
     if args.diagnostic:
         if args.prompt is not None or args.resume is not None:
@@ -98,15 +99,38 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.disable or args.enable or args.session or args.last is not None or args.json_output:
         parser.error("diagnostic options require stats, trace or telemetry")
     mode = args.mode
-    harness = Harness(args.workdir, **({"telemetry": False} if args.no_telemetry else {}), model=args.model, policy=Policy(mode, _approver if mode == "safe" else None), on_event=_event, max_turns=args.max_turns)
-    if args.resume is not None and not harness.resume(args.resume or None):
-        print("No session available to resume.")
-    if args.prompt is not None:
+    try:
+        harness = Harness(
+            args.workdir, **({"telemetry": False} if args.no_telemetry else {}),
+            model=args.model, policy=Policy(mode, _approver if mode == "safe" else None),
+            on_event=_event, max_turns=args.max_turns,
+        )
+        if args.resume is not None and not harness.resume(args.resume or None):
+            print("No session available to resume.")
+    except (OSError, ValueError, RuntimeError):
+        print("Error: cannot open the workspace or session. Check -d, --resume and file permissions.", file=sys.stderr)
+        raise SystemExit(1) from None
+
+    def run_task(task: str) -> None:
+        """Give expected failures safe guidance; keep interactive sessions usable."""
         try:
-            harness.run(args.prompt)
+            harness.run(task)
         except KeyboardInterrupt:
             print("\nInterrupted; the session log is safe and --resume continues it.")
-            raise SystemExit(130)
+            if args.prompt is not None:
+                raise SystemExit(130) from None
+        except (OSError, ValueError, RuntimeError):
+            print(
+                "Error: task failed. Check workspace permissions, network access, model availability "
+                "and SUDARSHAN_API_KEY (legacy ODYSSEUS_API_KEY / GEMINI_API_KEY also work). "
+                "Inspect project files before retrying with --resume; no raw error details are shown.",
+                file=sys.stderr,
+            )
+            if args.prompt is not None:
+                raise SystemExit(1) from None
+
+    if args.prompt is not None:
+        run_task(args.prompt)
         return
     print(f"Sudarshan · model={harness.model} · mode={mode} · workdir={harness.workdir}")
     while True:
@@ -119,7 +143,4 @@ def main(argv: Sequence[str] | None = None) -> None:
             print("\nInterrupted; the session log is safe and --resume continues it.")
             continue
         if task:
-            try:
-                harness.run(task)
-            except KeyboardInterrupt:
-                print("\nInterrupted; the session log is safe and --resume continues it.")
+            run_task(task)

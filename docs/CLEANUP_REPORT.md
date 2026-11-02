@@ -61,6 +61,60 @@ by the default CLI.
 
 ## Execution and verification
 
-Pending implementation and validation. This section will record individual-file
-cleanup counts, code/documentation changes, before/after test results, hosted CI,
-final structure and remaining limitations before completion.
+The audit was committed as `6d7d4ac` before deletion. The first cleanup removed
+**109 individually checked files**: 104 `.pyc` files and the five named Phase 6
+logs. Seven cache directories were removed only after becoming empty. No tracked
+file, historical report, fixture, regression test or example was deleted. No
+source files were moved. After validation, a second checked inventory removed
+105 regenerated `.pyc` files and seven empty cache directories. These counts
+describe cleanup operations; most paths overlap the initial bytecode inventory.
+The new release test accounts for the additional bytecode path. Validation logs
+and per-file manifests remain ignored in `ci-results/` as local audit evidence.
+
+Six imports were removed: `diagnostics` in CLI, `mean` in evaluation comparison,
+`shutil` in SSH, and `shutil`, `subprocess`, `redact` in Docker execution. No dead
+module or duplicate helper was safely removable: similar path helpers enforce
+different boundaries, and example/public entry points remain useful. Repeated
+CLI task-failure/interrupt handling is now one small helper. The intentional
+product security test import remains. No dependency was added or removed.
+
+The CLI now rejects negative turn limits before creating a workspace, describes
+project-root/resume/model/task options, reports expected failures without raw
+exception text, and keeps interactive use available after a failed task. Safe
+defaults, policy denials and interrupt exit status remain intact.
+
+The first post-cleanup full run found an intermittent existing memory concurrency
+error, not a successful validation: **377 run, 362 passed, 14 skipped, one error**.
+A focused reproduction identified NTFS resolving a delete-pending lock to an
+internal deleted-file path, plus transient access denied on exclusive creation.
+The fix resolves only the stable lock parent, rejects lock links, keeps exclusive
+creation and the two-second wait, and validates memory after acquiring the lock.
+Three deterministic regressions cover those cases without weakening path checks.
+An 80-iteration stress check completed **2,560 writes** with no lost facts or
+duplicate entries. Existing thread/process/symlink tests remain in place.
+
+Ignore rules retain `.sudarshan`/credential protection, include compiled/editor/OS
+caches and local benchmark export/results locations, and scope `work`, `projects`,
+validation logs and test workspaces to intended root locations. The former global
+`*.log` pattern is narrowed so fixture logs remain visible. New tests check both
+ignored private/runtime paths and visible source/docs/fixtures/workflows.
+
+README now links current onboarding/security/release documentation. Added
+`docs/GETTING_STARTED.md`, `docs/SECURITY.md`, `RELEASE_NOTES.md` and
+`FINAL_PROJECT_REPORT.md`; observability and evaluation link to the same current
+guidance. Installation is accurately described as checkout-based, with no pip
+installer. Current local Markdown links were verified. Historical reports remain
+unchanged, preserving their original claims and dates.
+
+Baseline: **369 run, 355 passed, 14 skipped, zero failures/errors**, Windows/Python
+3.12. Final local and hosted results are recorded in the
+[final report](../FINAL_PROJECT_REPORT.md). Compilation, CLI help, provider-free
+diagnostics, benchmark dry-run, Git whitespace and sensitive-file checks are part
+of the final gate. Eleven focused regressions are added; no coverage is removed.
+
+The final structure is unchanged apart from the new documents/tests; see the
+[layout](../FINAL_PROJECT_REPORT.md#repository-layout). Runtime state, earlier
+validation evidence and unidentified temporary workspaces remain ignored and
+untouched. Remaining issues are the existing OS-isolation/SSH/race/heuristic
+filtering/context-budget limits in [security](SECURITY.md), not an additional
+development phase. Main remains unchanged pending an approved review and merge.

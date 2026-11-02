@@ -1,5 +1,5 @@
 """Compare matching configurations without asserting statistical significance."""
-from statistics import mean, pstdev
+from statistics import pstdev
 
 FIELDS = ("suite", "suite_version", "fingerprint", "task_versions", "runs", "limits", "approval_policy", "provider_config", "prompt_config", "commit_sha", "engine_fingerprint", "platform", "python_version")
 

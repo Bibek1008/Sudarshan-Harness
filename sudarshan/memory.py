@@ -148,13 +148,22 @@ def build_system_prompt(workdir: str | Path, extra: str = "", *, task: str = "",
 @contextmanager
 def _writer(root: Path):
     """Serialize cooperating processes; never steal a possibly live writer's lock."""
-    lock = workspace_path(root, ".sudarshan-memory.lock")
+    # Resolve the stable parent, not a lock another writer may be deleting.
+    # NTFS can resolve a delete-pending file into C:\$Extend\$Deleted instead
+    # of its workspace name. O_EXCL never opens an existing file/link target.
+    lock = workspace_path(root, ".") / ".sudarshan-memory.lock"
+    if lock.is_symlink() or getattr(lock, "is_junction", lambda: False)():
+        raise PermissionError("Memory lock must not be a link")
     deadline = time.monotonic() + 2
     while True:
         try:
             descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
             break
-        except FileExistsError:
+        except (FileExistsError, PermissionError) as error:
+            if isinstance(error, PermissionError) and os.name != "nt":
+                raise
+            # Windows may briefly deny CREATE_NEW while the previous lock's
+            # deletion is pending. Retry within the same bounded wait.
             if time.monotonic() >= deadline:
                 raise ValueError("Project memory is busy; retry or inspect a stale lock") from None
             time.sleep(0.01)
@@ -191,7 +200,6 @@ def remember(workdir: str | Path, note: str, section: str = "", replaces: str = 
         except ValueError:
             return "ERROR: verified must be a non-future YYYY-MM-DD evidence date"
     root = Path(workdir).resolve()
-    workspace_path(root, MEMORY_FILE)
     with _writer(root):
         memory = workspace_path(root, MEMORY_FILE)
         text = _read(memory)

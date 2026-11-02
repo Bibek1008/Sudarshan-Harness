@@ -5,7 +5,15 @@ dependencies. Its teaching modules
 separate provider I/O, looping, tools, security, context, memory, skills,
 sessions, delegation, and orchestration.
 
-Clone the repository and run from its root; no pip install is required. On
+Start with [Getting started](docs/GETTING_STARTED.md) for installation, local
+configuration, safe coding, sessions and troubleshooting. See
+[current security limits](docs/SECURITY.md), [release notes](RELEASE_NOTES.md),
+[final verification](FINAL_PROJECT_REPORT.md) and the
+[repository cleanup report](docs/CLEANUP_REPORT.md). Root audit/security/phase
+reports are retained as dated engineering history; their earlier test counts
+are not the current release result.
+
+Clone the repository and run from its root; no pip installer is provided. On
 systems where Python is named `python3`, substitute that for `python` below.
 Gemini requests use `SUDARSHAN_API_KEY`, then legacy `ODYSSEUS_API_KEY`
 (backward compatibility), then generic `GEMINI_API_KEY`. Empty values fall back.

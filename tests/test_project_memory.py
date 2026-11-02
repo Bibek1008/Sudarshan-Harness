@@ -210,6 +210,50 @@ class ProjectMemoryTests(WorkspaceCase):
                 memory.remember(self.root, "fact")
         self.assertTrue(lock.exists())
 
+    def test_writer_does_not_resolve_a_volatile_lock_or_unlocked_memory(self):
+        original = memory.workspace_path
+        original_resolve = Path.resolve
+
+        def resolve(path, *args, **kwargs):
+            if path.name == ".sudarshan-memory.lock":
+                raise AssertionError("Delete-pending NTFS lock must not be resolved")
+            return original_resolve(path, *args, **kwargs)
+
+        def checked(root, name):
+            if name == memory.MEMORY_FILE:
+                self.assertTrue((self.root / ".sudarshan-memory.lock").exists())
+            return original(root, name)
+
+        with patch.object(memory, "workspace_path", side_effect=checked), patch.object(Path, "resolve", resolve):
+            memory.remember(self.root, "Safe concurrent fact")
+        self.assertIn("Safe concurrent fact", self.read())
+
+    def test_lock_link_is_rejected_without_opening_it(self):
+        with patch.object(Path, "is_symlink", return_value=True), patch.object(memory.os, "open") as opened:
+            with self.assertRaises(PermissionError):
+                with memory._writer(self.root):
+                    self.fail("must not enter writer")
+        opened.assert_not_called()
+
+    def test_windows_pending_lock_deletion_is_retried(self):
+        if os.name != "nt":
+            self.skipTest("Windows CREATE_NEW deletion-pending behavior")
+        original = memory.os.open
+        denied = PermissionError("synthetic deletion pending")
+        attempts = []
+
+        def opened(*args, **kwargs):
+            attempts.append(args)
+            if len(attempts) == 1:
+                raise denied
+            return original(*args, **kwargs)
+
+        with patch.object(memory.os, "open", side_effect=opened), patch.object(memory.time, "sleep"):
+            with memory._writer(self.root):
+                self.assertTrue((self.root / ".sudarshan-memory.lock").exists())
+        self.assertEqual(len(attempts), 2)
+        self.assertFalse((self.root / ".sudarshan-memory.lock").exists())
+
     def test_policy_blocks_untrusted_memory_mutations(self):
         replies = [{"text": "", "tool_calls": [{"name": "remember", "args": {"note": "untrusted instruction"}}]},
                    {"text": "done", "tool_calls": []}]
