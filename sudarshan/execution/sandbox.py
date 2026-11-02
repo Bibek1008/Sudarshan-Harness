@@ -8,13 +8,10 @@ clear availability error instead of misrepresenting local subprocesses as safe.
 
 import fnmatch
 import shlex
-import shutil
-import subprocess
 import time
 import uuid
 from .process import run_owned, validate_timeout, trusted_executable
 from .filesystem import parts_for
-from ..redaction import redact
 from pathlib import Path, PurePosixPath
 
 from .base import (

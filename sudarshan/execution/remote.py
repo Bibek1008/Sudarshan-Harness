@@ -10,7 +10,6 @@ from .filesystem import WorkspaceFiles, parts_for, FILE_LIMIT
 
 import shlex
 import re
-import shutil
 import subprocess
 import time
 from .process import run_owned, validate_timeout, trusted_executable

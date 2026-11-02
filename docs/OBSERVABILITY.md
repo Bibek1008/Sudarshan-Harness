@@ -1,5 +1,10 @@
 # Observability and diagnostics
 
+For setup and the distinction between transcript filenames and telemetry UUIDs,
+see [Getting started](GETTING_STARTED.md). See [security](SECURITY.md) for current
+privacy/isolation limits and the [final report](../FINAL_PROJECT_REPORT.md) for
+release validation; the Phase 4 report retains its historical results.
+
 Sudarshan records local, metadata-only telemetry using the standard library.
 It does not send telemetry to a service. Durable Harness runs enable telemetry by
 default; persist=False runs default to disabled unless telemetry=True is supplied.

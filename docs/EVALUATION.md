@@ -1,5 +1,10 @@
 # Agent evaluation and benchmarking
 
+For installation and provider-free first checks, see [Getting started](GETTING_STARTED.md).
+Current [security limits](SECURITY.md) and [release validation](../FINAL_PROJECT_REPORT.md)
+apply alongside this evaluation-specific protocol. Phase 5 results remain
+historical engineering evidence, not live model-performance measurements.
+
 The evaluation package measures controlled software-engineering tasks with independent
 verification. It reuses Harness, safe Policy, Phase 4 telemetry, workspace file
 primitives and the owned-process runner. It does not replace the agent loop.
