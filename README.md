@@ -27,6 +27,25 @@ The default model is `gemini-3.1-pro-preview`; override with `-m` or
 
 ## Run it
 
+Inside `sudarshan>`, enter natural-language agent tasks. Run PowerShell/CMD/Bash
+commands in your terminal. Type `exit`, `quit` or `:q` to leave before launching
+Sudarshan again; Windows Ctrl+Z then Enter also exits. Obvious PowerShell cmdlets
+and nested Sudarshan launches get local guidance without an AI request or shell
+execution. This check is guidance, not a complete shell-command parser.
+
+Use `--verbose` for sanitized error categories, exception types and traceback
+locations, for example:
+
+```powershell
+sudarshan -d "C:\path\to\project" --mode read-only -m gemini-3.1-flash-lite --verbose
+```
+
+Diagnostics never render arbitrary exception strings, HTTP bodies/headers, source
+lines, locals or external traceback paths. Known provider status codes and safe
+failure details are shown. Verbose mode does not enable tools or alter project
+`.env` loading. Inspect files before continuing an interrupted saved session;
+resume guidance is shown only when a nonempty durable transcript exists.
+
 Set `SUDARSHAN_API_KEY` in your local environment before running. From the repository
 root, use one of these forms:
 

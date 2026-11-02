@@ -48,7 +48,8 @@ class ReleaseCLITests(WorkspaceCase):
                 with self.assertRaises(SystemExit) as caught:
                     cli.main(["-p", "task"])
                 self.assertEqual(caught.exception.code, 1)
-                self.assertIn("SUDARSHAN_API_KEY", error.getvalue())
+                self.assertIn("--verbose", error.getvalue())
+                self.assertNotIn("--resume", error.getvalue())
                 self.assertNotIn("synthetic-private-value", error.getvalue())
 
     def test_interactive_expected_failure_allows_another_task(self):

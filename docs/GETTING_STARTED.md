@@ -22,6 +22,30 @@ available from any working directory while that environment is active. See
 [package installation](PACKAGING.md) for the full PowerShell workflow and
 upgrade instructions.
 
+## Interactive prompt and troubleshooting
+
+For interactive use, `sudarshan>` accepts natural-language tasks, such as
+`List the project directories and explain their purpose`. It is not PowerShell.
+To run `Get-ChildItem` or launch another `sudarshan` command, first type `exit`,
+`quit` or `:q`, then run the command back in PowerShell. Windows Ctrl+Z followed
+by Enter also exits; EOF exits without making an AI request. Read-only mode still
+blocks shell tools; the prompt never falls back to executing a command itself.
+
+For troubleshooting, add the agent CLI's `--verbose` option:
+
+```powershell
+sudarshan -d "C:\path\to\project" --mode read-only -m gemini-3.1-flash-lite --verbose
+```
+
+Default errors are short and distinguish known authentication/access, network,
+model, policy, tool and internal failures. Verbose diagnostics add a safe
+exception type and package traceback file/line locations. Arbitrary exception
+messages, response bodies, authorization headers, source lines, local variables
+and external frame paths are deliberately withheld: any can contain an API key
+or an entire dotenv file. Diagnostics do not read `.env` to discover secrets;
+the existing provider loader below is unchanged. No extra diagnostic log file
+is written, and original exceptions are not added to telemetry or transcripts.
+
 ## Configure Gemini
 
 The recommended project-level setup is a `.env` file in the project directory
