@@ -9,28 +9,106 @@ model thought signatures exactly, so later tool turns remain valid.
 from . import telemetry
 
 from contextvars import ContextVar
-
-REQUEST_DEADLINE = ContextVar("gemini_request_deadline", default=None)
-
 import json
 import os
+from pathlib import Path
 import time
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+REQUEST_DEADLINE = ContextVar("gemini_request_deadline", default=None)
+# Harness.run sets this to the selected project's .env for the duration of a run.
+# A ContextVar avoids process-global environment mutation and isolates concurrent
+# harness instances that use different workspaces.
+PROJECT_ENV_FILE: ContextVar[Path | None] = ContextVar(
+    "sudarshan_project_env_file", default=None
+)
+
 API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models"
 DEFAULT_MODEL = "gemini-3.1-pro-preview"
+API_KEY_NAMES = ("SUDARSHAN_API_KEY", "ODYSSEUS_API_KEY", "GEMINI_API_KEY")
+
+
+def _dotenv_value(raw: str, line_number: int) -> str:
+    """Parse one dotenv value without executing shell syntax or interpolation."""
+    value = raw.strip()
+    if not value:
+        return ""
+
+    if value[0] in {"'", '"'}:
+        quote = value[0]
+        escaped = False
+        closing = None
+        for index in range(1, len(value)):
+            char = value[index]
+            if char == quote and not escaped:
+                closing = index
+                break
+            if char == "\\" and not escaped:
+                escaped = True
+            else:
+                escaped = False
+        if closing is None:
+            raise ValueError(f"Unclosed quote in project .env on line {line_number}")
+        trailing = value[closing + 1:].strip()
+        if trailing and not trailing.startswith("#"):
+            raise ValueError(f"Unexpected text in project .env on line {line_number}")
+        return value[1:closing]
+
+    # An inline comment starts only when # is preceded by whitespace.
+    comment = value.find(" #")
+    if comment >= 0:
+        value = value[:comment].rstrip()
+    return value
+
+
+def _read_project_api_keys(path: Path | None) -> dict[str, str]:
+    """Read only supported API-key assignments from a project-local .env file."""
+    if path is None:
+        return {}
+    try:
+        lines = path.read_text(encoding="utf-8-sig").splitlines()
+    except FileNotFoundError:
+        return {}
+
+    values: dict[str, str] = {}
+    for line_number, original in enumerate(lines, start=1):
+        line = original.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        name, separator, raw_value = line.partition("=")
+        if not separator:
+            continue
+        name = name.strip()
+        if name not in API_KEY_NAMES:
+            continue
+        value = _dotenv_value(raw_value, line_number)
+        if value:
+            values[name] = value
+    return values
+
 
 def api_key() -> str:
-    """Return the configured API key, preferring the harness-specific name."""
-    key = (os.environ.get("SUDARSHAN_API_KEY") or os.environ.get("ODYSSEUS_API_KEY")
-           or os.environ.get("GEMINI_API_KEY"))
-    if not key:
-        raise RuntimeError(
-            "Set SUDARSHAN_API_KEY (or legacy ODYSSEUS_API_KEY / GEMINI_API_KEY) before calling Gemini."
-        )
-    return key
+    """Resolve an API key: process environment first, then the active project's .env."""
+    for name in API_KEY_NAMES:
+        key = os.environ.get(name)
+        if key:
+            return key
+
+    project_values = _read_project_api_keys(PROJECT_ENV_FILE.get())
+    for name in API_KEY_NAMES:
+        key = project_values.get(name)
+        if key:
+            return key
+
+    raise RuntimeError(
+        "Set SUDARSHAN_API_KEY (or legacy ODYSSEUS_API_KEY / GEMINI_API_KEY) "
+        "in the environment or the selected project's .env file."
+    )
+
 
 def complete(
     model: str,
@@ -87,6 +165,7 @@ def complete(
             "usage": {"input": metadata.get("promptTokenCount", 0),
                       "output": metadata.get("candidatesTokenCount", 0)}}
 
+
 def _to_wire(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Translate neutral harness messages into Gemini ``contents`` entries."""
     contents: list[dict[str, Any]] = []
@@ -111,6 +190,7 @@ def _to_wire(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         else:
             raise ValueError(f"Unknown neutral message role: {role}")
     return contents
+
 
 def _post(url: str, body: dict[str, Any], retries: int = 5) -> dict[str, Any]:
     """POST JSON, retrying transient API and network failures with backoff."""

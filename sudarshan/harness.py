@@ -91,32 +91,36 @@ class Harness:
         return True
 
     def run(self, task: str) -> str:
-        """Execute with a separate metadata-only telemetry scope."""
-        recorder = None
-        if self.telemetry:
-            try:
-                store = diagnostics.Store(self.workdir)
-                if store.enabled(): recorder = diagnostics.Recorder(store, self.model)
-            except (OSError, ValueError):
-                self.telemetry_storage_failed = True
-        token = diagnostics.ACTIVE.set(recorder)
-        if recorder:
-            self.last_telemetry_session = recorder.session_id
-            recorder.emit("session_started", status="started")
+        """Execute with project-local credential lookup and metadata-only telemetry."""
+        env_file_token = provider.PROJECT_ENV_FILE.set(self.workdir / ".env")
         try:
-            answer = self._run(task)
-            if recorder: recorder.emit("session_completed", duration_ms=(time.perf_counter()-recorder.started)*1000)
-            return answer
-        except BaseException as error:
+            recorder = None
+            if self.telemetry:
+                try:
+                    store = diagnostics.Store(self.workdir)
+                    if store.enabled(): recorder = diagnostics.Recorder(store, self.model)
+                except (OSError, ValueError):
+                    self.telemetry_storage_failed = True
+            token = diagnostics.ACTIVE.set(recorder)
             if recorder:
-                interrupted = isinstance(error, (KeyboardInterrupt, SystemExit))
-                recorder.emit("session_interrupted" if interrupted else "session_completed", status="interrupted" if interrupted else "failed", error_category="interrupted" if interrupted else "session_error", duration_ms=(time.perf_counter()-recorder.started)*1000)
-            raise
+                self.last_telemetry_session = recorder.session_id
+                recorder.emit("session_started", status="started")
+            try:
+                answer = self._run(task)
+                if recorder: recorder.emit("session_completed", duration_ms=(time.perf_counter()-recorder.started)*1000)
+                return answer
+            except BaseException as error:
+                if recorder:
+                    interrupted = isinstance(error, (KeyboardInterrupt, SystemExit))
+                    recorder.emit("session_interrupted" if interrupted else "session_completed", status="interrupted" if interrupted else "failed", error_category="interrupted" if interrupted else "session_error", duration_ms=(time.perf_counter()-recorder.started)*1000)
+                raise
+            finally:
+                if recorder:
+                    recorder.finish()
+                    self.telemetry_storage_failed = recorder.storage_failed
+                diagnostics.ACTIVE.reset(token)
         finally:
-            if recorder:
-                recorder.finish()
-                self.telemetry_storage_failed = recorder.storage_failed
-            diagnostics.ACTIVE.reset(token)
+            provider.PROJECT_ENV_FILE.reset(env_file_token)
 
     def _run(self, task: str) -> str:
         """Record one task, run the loop, and persist each event-produced message."""
@@ -179,7 +183,7 @@ class Harness:
               replaces="Exact existing bullet text to replace or remove; never inferred.",
               verified="Optional YYYY-MM-DD date supported by evidence; otherwise leave empty.")
         def remember(note: str, section: str = "", replaces: str = "", verified: str = "") -> str:
-            """Use the normal policy approval boundary for every memory mutation."""
+            """Use the normal tool policy approval boundary for every memory mutation."""
             return memory.remember(self.workdir, note, section, replaces, verified)
 
         return remember

@@ -24,12 +24,27 @@ upgrade instructions.
 
 ## Configure Gemini
 
-Set the API key in the environment of the terminal where you will run
-Sudarshan. The provider checks `SUDARSHAN_API_KEY`, then legacy
-`ODYSSEUS_API_KEY`, then `GEMINI_API_KEY`. Sudarshan does not automatically
-read `.env` files.
+The recommended project-level setup is a `.env` file in the project directory
+you pass with `-d`. Create a file named `.env` in that directory:
 
-For example, in PowerShell:
+```dotenv
+SUDARSHAN_API_KEY=your-gemini-api-key
+```
+
+Sudarshan reads the API key from the process environment first (checking
+`SUDARSHAN_API_KEY`, `ODYSSEUS_API_KEY`, then `GEMINI_API_KEY`). If none is
+set, it reads those same names from the selected project's `.env` file. Process
+environment variables always win. The built-in reader uses only the Python
+standard library; it does not execute the file or support shell interpolation.
+Only the three supported API-key variables are read from the file.
+
+The repository's `.gitignore` excludes `.env` files. Keep `.env` out of Git
+in every application project as well. The key is read for Gemini requests; it
+is not added to the process environment, saved in transcripts or telemetry, or
+passed to child shell commands.
+
+For example, in PowerShell, you can also configure the current terminal
+session instead of using a file:
 
 ```powershell
 $env:SUDARSHAN_API_KEY = "YOUR_GEMINI_API_KEY"
@@ -41,9 +56,9 @@ until it exits or you remove it. A masked prompt version is documented in
 [package installation](PACKAGING.md).
 
 The default model is `gemini-3.1-pro-preview`. Override it with `-m MODEL` or
-`ODYSSEUS_MODEL`. Model access and API usage depend on your Gemini account.
-Help, package installation, benchmark listing, and benchmark dry-runs do not
-make Gemini requests.
+`ODYSSEUS_MODEL` in the process environment. Model access and API usage depend
+on your Gemini account. Help, package installation, benchmark listing, and
+benchmark dry-runs do not make Gemini requests.
 
 ## Work on a project
 
@@ -52,6 +67,7 @@ no need to clone or copy the harness into each application:
 
 ```powershell
 Set-Location C:\path\to\my-project
+# Put SUDARSHAN_API_KEY=... in this folder's .env file.
 sudarshan -d . --mode safe
 ```
 
